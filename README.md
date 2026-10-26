@@ -2,18 +2,18 @@
 
 A Chrome extension of small upgrades for watching Twitch: player controls, emotes, chat, watch streaks, VOD markers and split screen.
 
-## Install (about 1 minute)
+## Install in Brave or Chrome (about 1 minute)
 
-1. Go to **[Releases](../../releases/latest)** and download `MytwitchTom-2.0.zip`.
+1. Download **[MytwitchTom-2.0.zip](../../releases/latest/download/MytwitchTom-2.0.zip)**.
 2. Unzip it. You get a folder called `MytwitchTom`. Put it somewhere it can stay, like Documents; Chrome loads the extension from that folder every time.
-3. In Chrome, go to `chrome://extensions`.
+3. Go to `brave://extensions` in Brave, or `chrome://extensions` in Chrome.
 4. Turn on **Developer mode** (switch in the top-right corner).
 5. Click **Load unpacked** and choose the `MytwitchTom` folder.
 6. Open or refresh any twitch.tv tab.
 
-To update: replace the folder with the new one, click the reload arrow on MytwitchTom's card in `chrome://extensions`, and refresh Twitch.
+To update: replace the folder with the new one, click the reload arrow on MytwitchTom's card on the extensions page, and refresh Twitch.
 
-The release also has **MytwitchTom-2.0-Guide.pdf**, which shows what every feature does.
+The [release](../../releases/latest) also has **MytwitchTom-2.0-Guide.pdf**, which shows what every feature does.
 
 ## Features
 
