@@ -6,10 +6,11 @@
 //   Drag a marker             -> move it
 //   Right-click a marker      -> edit its note or remove it
 //
-// On a live stream there's no seek bar, so a bookmark button in the player's
-// right-hand controls marks "now" (time since the stream started). Those marks
-// are saved against the broadcast's start time. When you later open that
-// broadcast's VOD, they're copied onto it automatically: VOD time = stream time.
+// The bookmark button in the player's right-hand controls marks right where you
+// are (live or VOD) and asks for a note; right-click it for the list of marks.
+// Live marks are "time since the stream started", saved against the broadcast's
+// start time. When you later open that broadcast's VOD, they're copied onto it
+// automatically: VOD time = stream time.
 //
 // Saved in chrome.storage.local:
 //   "marks:<vodId>"            { marks: [{ id, t, note }], removed: [ids] }
@@ -328,10 +329,34 @@
   }
 
   // Seconds since the broadcast started, from Twitch's "0:18:52" uptime counter.
+  // That counter isn't on screen in theatre mode, fullscreen or narrow windows,
+  // so fall back to the start time Twitch gives for the channel's stream.
+  const starts = {}; // channel -> stream start (ms), or null while asking
   function uptime() {
     const el = document.querySelector(".live-time");
     const m = el && el.textContent.match(/(\d+):(\d\d):(\d\d)/);
-    return m ? +m[1] * 3600 + +m[2] * 60 + +m[3] : null;
+    if (m) return +m[1] * 3600 + +m[2] * 60 + +m[3];
+    const channel = channelName();
+    if (!channel) return null;
+    if (!(channel in starts)) loadStart(channel);
+    return starts[channel] ? Math.floor((Date.now() - starts[channel]) / 1000) : null;
+  }
+
+  function loadStart(channel) {
+    starts[channel] = null;
+    fetch("https://gql.twitch.tv/gql", {
+      method: "POST",
+      headers: { "Client-Id": "kimne78kx3ncx6brgo4mv6wki5h1ko" },
+      body: JSON.stringify({ query: "query($l:String!){ user(login:$l){ stream{ createdAt } } }", variables: { l: channel } }),
+    })
+      .then((r) => r.json())
+      .then((j) => {
+        const at = Date.parse(j.data?.user?.stream?.createdAt || "");
+        if (at) starts[channel] = at;
+        else delete starts[channel]; // not live (yet); ask again later
+        renderLiveButton();
+      })
+      .catch(() => delete starts[channel]);
   }
 
   // Find (or start) the saved record for the broadcast being watched.
@@ -358,7 +383,12 @@
     if (live && alive()) chrome.storage.local.set({ [liveKey]: live });
   }
 
-  function markLiveNow(button) {
+  function markLiveNow(button, retried) {
+    // Twitch's start time may still be on its way; try again in a moment.
+    if (uptime() == null) {
+      if (!retried) setTimeout(() => markLiveNow(button, true), 1500);
+      return;
+    }
     liveRecord(() => {
       const t = Math.max(0, uptime() - LIVE_DELAY_S);
       const mark = { id: newId(), t, note: "" };
@@ -407,25 +437,36 @@
       const count = b.querySelector(".tbc-live-mark__count");
       if (count.textContent !== (n ? String(n) : "")) count.textContent = n ? String(n) : "";
       const title = isVod
-        ? `Markers${n ? ` (${n})` : ""}: click to see the list`
-        : `Mark this moment${n ? ` (${n} marked this stream)` : ""}\nMarks show up on this stream's VOD later`;
+        ? `Mark this moment${n ? ` (${n} markers)` : ""}\nRight-click for the list of markers`
+        : `Mark this moment${n ? ` (${n} marked this stream)` : ""}\nMarks show up on this stream's VOD later\nRight-click for the list`;
       if (b.title !== title) b.title = title;
     });
     if (list) fillList();
   }
 
+  // Click: mark right where you are. Right-click: the list of marks.
   window.addEventListener("click", (e) => {
     const b = e.target.closest?.(".tbc-live-mark");
     if (!b) return;
     e.preventDefault();
     e.stopPropagation();
-    if (videoId) toggleList(b);
+    closeList();
+    if (videoId) markVodNow(b);
     else markLiveNow(b);
   }, true);
 
-  // ===== VOD marker list ===============================================================
+  window.addEventListener("contextmenu", (e) => {
+    const b = e.target.closest?.(".tbc-live-mark");
+    if (!b) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (videoId) toggleList(b);
+    else liveRecord(() => toggleList(b));
+  }, true);
+
+  // ===== Marker list ===================================================================
   // A pop-up above the bookmark button listing every marker (time, and note in
-  // small text). Click one to jump there.
+  // small text). On a VOD, click one to jump there; live marks just list.
 
   let list = null; // { el, button }
 
@@ -451,7 +492,9 @@
 
   function fillList() {
     const { el, button } = list;
-    const key = JSON.stringify(vod.marks);
+    const isVod = !!videoId;
+    const marks = isVod ? vod.marks : live?.marks || [];
+    const key = (isVod ? "vod" : "live") + JSON.stringify(marks);
     if (el.dataset.key !== key) {
       el.dataset.key = key;
       el.textContent = "";
@@ -461,19 +504,21 @@
       const add = document.createElement("button");
       add.type = "button";
       add.className = "tbc-marklist__add";
-      add.textContent = "+ Mark current time";
-      add.addEventListener("click", () => markVodNow(button));
+      add.textContent = isVod ? "+ Mark current time" : "+ Mark now";
+      add.addEventListener("click", () => (isVod ? markVodNow(button) : markLiveNow(button)));
       head.append(add);
       el.append(head);
-      if (!vod.marks.length) {
+      if (!marks.length) {
         const empty = document.createElement("p");
         empty.className = "tbc-marklist__empty";
-        empty.textContent = "No markers yet. Right-click the seek bar or use Mark current time.";
+        empty.textContent = isVod
+          ? "No markers yet. Click the bookmark button or right-click the seek bar."
+          : "No marks this stream yet. Click the bookmark button to mark the moment.";
         el.append(empty);
       }
       const items = document.createElement("div");
       items.className = "tbc-marklist__items";
-      for (const m of vod.marks) {
+      for (const m of marks) {
         const item = document.createElement("button");
         item.type = "button";
         item.className = "tbc-marklist__item";
@@ -487,12 +532,16 @@
           note.textContent = m.note;
           item.append(note);
         }
-        item.title = `Jump to ${formatTime(m.t)}`;
-        item.addEventListener("click", () => {
-          const v = video();
-          if (v) v.currentTime = m.t;
-          closeList();
-        });
+        if (isVod) {
+          item.title = `Jump to ${formatTime(m.t)}`;
+          item.addEventListener("click", () => {
+            const v = video();
+            if (v) v.currentTime = m.t;
+            closeList();
+          });
+        } else {
+          item.title = `${formatTime(m.t)} into the stream: shows on the VOD later`;
+        }
         items.append(item);
       }
       el.append(items);
