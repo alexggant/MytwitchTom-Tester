@@ -5,7 +5,7 @@ A Chrome extension of small upgrades for watching Twitch: player controls, emote
 ## Install in Brave or Chrome (about 1 minute)
 
 1. Download **[MytwitchTom-2.0.zip](../../releases/latest/download/MytwitchTom-2.0.zip)**.
-2. Unzip it. You get a folder called `MytwitchTom`. Put it somewhere it can stay, like Documents; Chrome loads the extension from that folder every time.
+2. Unzip it. You get a folder called `MytwitchTom`. Put it somewhere it can stay, like Documents; your browser loads the extension from that folder every time.
 3. Go to `brave://extensions` in Brave, or `chrome://extensions` in Chrome.
 4. Turn on **Developer mode** (switch in the top-right corner).
 5. Click **Load unpacked** and choose the `MytwitchTom` folder.
