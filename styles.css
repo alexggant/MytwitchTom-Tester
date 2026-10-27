@@ -1484,6 +1484,7 @@ html.tbc-peek [role="dialog"][aria-labelledby="channel-points-reward-center-head
 .tbc-hl .tbc-phrases__head {
   margin-bottom: 4px;
 }
+
 .tbc-hl__chips {
   display: flex;
   flex-wrap: wrap;
@@ -1509,7 +1510,7 @@ html.tbc-peek [role="dialog"][aria-labelledby="channel-points-reward-center-head
 .tbc-hl__x:hover {
   opacity: 1;
 }
-.tbc-hl__add .tbc-phrases__hlnew {
+.tbc-hl__add .tbc-phrases__chipnew {
   width: 80px;
   padding: 2px 6px;
   font-size: 12px;
@@ -1518,4 +1519,341 @@ html.tbc-peek [role="dialog"][aria-labelledby="channel-points-reward-center-head
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px solid #2f2f35;
+}
+
+/* ===== Ask the Streamer (askstreamer.js) ===== */
+
+/* The header button: "Ask" on other channels, "Questions" on yours. Same look
+   as the Pin button. */
+.tbc-askhdr {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  margin-right: 10px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 4px;
+  background: rgba(83, 83, 95, 0.38);
+  color: #efeff1;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tbc-askhdr:hover {
+  background: rgba(83, 83, 95, 0.55);
+}
+
+/* Shared bits: the panel's and cards' fonts, inputs, purple buttons and ×. */
+.tbc-askpanel,
+.tbc-qcard,
+.tbc-acard {
+  color: #efeff1;
+  font: 13px/1.4 Inter, Roobert, "Helvetica Neue", Arial, sans-serif;
+}
+.tbc-askpanel input,
+.tbc-qcard__own input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  padding: 7px 9px;
+  box-sizing: border-box;
+  border: 1px solid #53535f;
+  border-radius: 6px;
+  background: #0e0e10;
+  color: #efeff1;
+  font: inherit;
+}
+.tbc-askpanel input:focus,
+.tbc-qcard__own input:focus {
+  border-color: #9147ff;
+  outline: none;
+}
+.tbc-askpanel__form button,
+.tbc-qcard__own button {
+  padding: 0 14px;
+  border: 0;
+  border-radius: 6px;
+  background: #9147ff;
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tbc-askpanel__form button:hover,
+.tbc-qcard__own button:hover {
+  background: #772ce8;
+}
+.tbc-x {
+  flex: none;
+  align-self: flex-start;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: #adadb8;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.tbc-x:hover {
+  background: rgba(83, 83, 95, 0.48);
+  color: #efeff1;
+}
+
+/* The panel under the header button: asking, or your allow list. */
+.tbc-askpanel {
+  position: fixed;
+  z-index: 10000;
+  width: 320px;
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 14px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  background: #18181b;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.6);
+}
+.tbc-askpanel__head {
+  font-size: 15px;
+  font-weight: 600;
+}
+.tbc-askpanel__sub,
+.tbc-askpanel__note {
+  margin: 4px 0 10px;
+  color: #adadb8;
+  font-size: 12px;
+}
+.tbc-askpanel__note:empty {
+  display: none;
+}
+.tbc-askpanel__form {
+  display: flex;
+  gap: 6px;
+}
+.tbc-allow {
+  margin-bottom: 8px;
+}
+.tbc-allow__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 2px;
+}
+.tbc-allow__row .tbc-x {
+  align-self: center;
+}
+.tbc-allow__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+/* People search for the allow list. */
+.tbc-usearch__pic {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #3a3a3d;
+  object-fit: cover;
+}
+.tbc-usearch {
+  margin-top: 6px;
+  padding: 4px;
+  border: 1px solid #3a3a3d;
+  border-radius: 6px;
+  background: #0e0e10;
+}
+.tbc-usearch:empty {
+  display: none;
+}
+.tbc-usearch__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: #efeff1;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.tbc-usearch__item:hover,
+.tbc-usearch__item:first-child {
+  background: #2f2f35;
+}
+.tbc-usearch__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tbc-usearch__from,
+.tbc-usearch__empty {
+  color: #adadb8;
+  font-size: 11px;
+}
+.tbc-usearch__empty {
+  padding: 5px 6px;
+}
+
+/* Where the cards go: at the top of chat, under Twitch's pinned messages (it
+   hangs from their floating stack while that's showing), or floating near the
+   top of the window on a page with no chat. */
+.tbc-chatpins {
+  flex: none;
+  max-height: 45vh;
+  overflow-y: auto;
+  padding: 6px 0 2px;
+  border-bottom: 1px solid #2f2f35;
+  background: var(--color-background-base, #18181b);
+}
+.tbc-chatpins > * {
+  margin: 4px 10px 6px;
+}
+.tbc-floatcards {
+  position: fixed;
+  top: 64px;
+  left: 50%;
+  z-index: 10001;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(440px, calc(100vw - 32px));
+  transform: translateX(-50%);
+}
+
+/* The answer icons, in their colours (on the buttons and on the asker's card). */
+.tbc-answer--y { color: #00c27a; }
+.tbc-answer--n { color: #eb0400; }
+.tbc-answer--m { color: #ffb31a; }
+.tbc-answer--s { color: #4fc3f7; }
+.tbc-answer--o { color: #efeff1; }
+.tbc-answer--t { color: #bf94ff; }
+.tbc-answer--c { color: #bf94ff; }
+.tbc-answer--failed { color: #ff8280; }
+
+/* The streamer's question card. */
+.tbc-qcard {
+  padding: 10px 12px 8px;
+  border: 2px solid #ffb31a;
+  border-radius: 10px;
+  background: #18181b;
+}
+.tbc-qcard__head {
+  color: #ffb31a;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+.tbc-qcard__text {
+  margin: 3px 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.tbc-qcard__error {
+  margin: -4px 0 8px;
+  color: #ff8280;
+  font-size: 12px;
+}
+.tbc-qcard__answers {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.tbc-qcard__answer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 2px;
+  border: 0;
+  border-radius: 8px;
+  background: #2f2f35;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tbc-qcard__answer span {
+  color: #efeff1;
+}
+.tbc-qcard__answer:hover {
+  background: #3a3a44;
+}
+.tbc-qcard__own {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.tbc-qcard__dismiss {
+  display: block;
+  margin: 6px auto 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #adadb8;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.tbc-qcard__dismiss:hover {
+  color: #efeff1;
+  text-decoration: underline;
+}
+
+/* The asker's card: the answer with its icon, or why the question didn't send. */
+.tbc-acard {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 6px 10px 10px;
+  border: 2px solid #9147ff;
+  border-radius: 10px;
+  background: #18181b;
+}
+.tbc-acard--failed {
+  border-color: #eb0400;
+}
+.tbc-acard__icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #2f2f35;
+}
+.tbc-acard__body {
+  flex: 1;
+  min-width: 0;
+}
+.tbc-acard__who {
+  color: #adadb8;
+  font-size: 11px;
+}
+.tbc-acard__head {
+  font-size: 15px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.tbc-acard__text,
+.tbc-acard__question {
+  color: #adadb8;
+  font-size: 12px;
+  overflow-wrap: anywhere;
 }

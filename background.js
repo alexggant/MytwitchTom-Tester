@@ -4,6 +4,7 @@
 //
 // Saved in chrome.storage.local:
 //   "streakSaverTab"  id of the tab inside the saver window
+//   "askSenderTab"    id of the tab in the window sending Ask the Streamer whispers
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg.type === "openStreakSaver") {
@@ -20,6 +21,35 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
 
   if (msg.type === "streakSaverDone" && sender.tab) {
     chrome.storage.local.remove("streakSaverTab");
+    chrome.windows.remove(sender.tab.windowId);
+  }
+
+  // Ask the Streamer (askstreamer.js): a small window on a Twitch settings page
+  // sends the waiting whispers from Twitch's whisper window, then asks to be closed. One at a time;
+  // a window already sending picks up anything queued meanwhile.
+  if (msg.type === "openAskSender") {
+    chrome.storage.local.get("askSenderTab", (d) => {
+      const open = d.askSenderTab ? chrome.tabs.get(d.askSenderTab).then(() => true, () => false) : Promise.resolve(false);
+      open.then((busy) => {
+        if (busy) return;
+        chrome.windows.create(
+          // Same side as the page that asked: an Incognito page's whisper goes out
+          // from Incognito (its own Twitch sign-in), not from your normal window.
+          { url: msg.url, type: "popup", width: 420, height: 520, left: msg.left, top: msg.top, focused: false,
+            incognito: !!sender.tab?.incognito },
+          (win) => chrome.storage.local.set({ askSenderTab: win.tabs[0].id }),
+        );
+      });
+    });
+  }
+
+  if (msg.type === "amAskSender") {
+    chrome.storage.local.get("askSenderTab", (d) => reply(!!sender.tab && d.askSenderTab === sender.tab.id));
+    return true; // reply comes later
+  }
+
+  if (msg.type === "askSenderDone" && sender.tab) {
+    chrome.storage.local.remove("askSenderTab");
     chrome.windows.remove(sender.tab.windowId);
   }
 });

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "MytwitchTom",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Upgrades for watching Twitch: player, emotes, chat, watch streaks, VOD markers and split screen.",
   "content_scripts": [
     {
@@ -26,7 +26,8 @@
         "accounts.js",
         "claim.js",
         "splitview.js",
-        "pinchannels.js"
+        "pinchannels.js",
+        "askstreamer.js"
       ],
       "run_at": "document_idle",
       "exclude_matches": [

@@ -4,7 +4,7 @@ A Chrome extension of small upgrades for watching Twitch: player controls, emote
 
 ## Install in Brave or Chrome (about 1 minute)
 
-1. Download **[MytwitchTom-2.1.zip](../../releases/latest/download/MytwitchTom-2.1.zip)**.
+1. Download **[MytwitchTom-2.2.zip](../../releases/latest/download/MytwitchTom-2.2.zip)**.
 2. Unzip it. You get a folder called `MytwitchTom`. Put it somewhere it can stay, like Documents; your browser loads the extension from that folder every time.
 3. Go to `brave://extensions` in Brave, or `chrome://extensions` in Chrome.
 4. Turn on **Developer mode** (switch in the top-right corner).
@@ -13,7 +13,7 @@ A Chrome extension of small upgrades for watching Twitch: player controls, emote
 
 **Already have an older version?** On the extensions page click **Remove** on MytwitchTom's card (and confirm), delete the old `MytwitchTom` folder, then do the steps above with the new zip. Removing it clears its saved phrases, notes, pins and markers, so jot down anything you want to keep first.
 
-The [release](../../releases/latest) also has **MytwitchTom-2.1-Guide.pdf**, which shows what every feature does.
+The [release](../../releases/latest) also has **MytwitchTom-2.2-Guide.pdf**, which shows what every feature does.
 
 ## Features
 
@@ -23,6 +23,7 @@ The [release](../../releases/latest) also has **MytwitchTom-2.1-Guide.pdf**, whi
 - **Channel points:** reward search; favorite rewards shown above the rest; the Claim Bonus button is clicked for you.
 - **People:** right-click a chatter for notes, pronouns and where you know them from; an account switcher in the avatar menu.
 - **Pinned channels:** a Pin button next to Follow puts a channel in a Pinned Channels list at the top of the sidebar, live or not.
+- **Ask the Streamer:** an Ask button in the channel header sends the streamer a private question (as a whisper); people on their allow list pop up as a card at the top of their chat with one-click answers, and the answer comes back with its icon. Both need MytwitchTom.
 - **Split screen:** watch two streams side by side, each with its own chat, with a sound menu to pick which one you hear.
 - **Bookmarks and VODs:** the bookmark button marks your spot and opens your marker list (× deletes); live marks sit on the live timeline and carry over to the VOD; VOD markers with notes.
 
