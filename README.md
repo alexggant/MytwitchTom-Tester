@@ -11,7 +11,7 @@ A Chrome extension of small upgrades for watching Twitch: player controls, emote
 5. Click **Load unpacked** and choose the `MytwitchTom` folder.
 6. Open or refresh any twitch.tv tab.
 
-**Already have an older version?** Download the new zip, replace your old `MytwitchTom` folder with the new one (same place, same name), click the reload arrow on MytwitchTom's card on the extensions page, and refresh Twitch. Use the reload arrow, not Remove: removing it, or loading the folder from a different place, starts fresh and loses your saved phrases, notes, pins and markers.
+**Already have an older version?** On the extensions page click **Remove** on MytwitchTom's card (and confirm), delete the old `MytwitchTom` folder, then do the steps above with the new zip. Removing it clears its saved phrases, notes, pins and markers, so jot down anything you want to keep first.
 
 The [release](../../releases/latest) also has **MytwitchTom-2.1-Guide.pdf**, which shows what every feature does.
 
