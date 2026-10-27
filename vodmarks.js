@@ -7,7 +7,15 @@
 //   Right-click a marker      -> edit its note or remove it
 //
 // The bookmark button in the player's right-hand controls marks right where you
-// are (live or VOD) and asks for a note; right-click it for the list of marks.
+// are (live or VOD) and opens the list of your marks with the new one lit up;
+// × on a row deletes that mark. Right-click the button just to see the list.
+//
+// On a live stream your marks sit on the timeline as the same orange pins:
+// Twitch's own rewind bar where the channel has one, or else a slim purple
+// line of ours above the controls. Either runs from the start of the stream to
+// now, so as the stream goes on the marks slide back, staying at their moment.
+//   Right-click the timeline -> drop a mark at that point and type a note
+//   Click or right-click a mark -> edit its note or remove it
 // Live marks are "time since the stream started", saved against the broadcast's
 // start time. When you later open that broadcast's VOD, they're copied onto it
 // automatically: VOD time = stream time.
@@ -139,13 +147,14 @@
   function render() {
     renderSeekbar();
     renderLiveButton();
+    renderLiveBar();
   }
 
   function renderSeekbar() {
     const d = duration();
     const key = videoId && d ? `${videoId}|${d}|${JSON.stringify(vod.marks)}` : "";
     document.querySelectorAll(`${SEEKBAR} ${BAR}`).forEach((bar) => {
-      let layer = bar.querySelector(".tbc-marks");
+      let layer = bar.querySelector(".tbc-marks:not(.tbc-marks--live)");
       if (!key) {
         if (layer) layer.remove();
         return;
@@ -252,7 +261,7 @@
   // Listeners sit on window in the capture phase and stop the event there, so
   // Twitch's own seek bar never sees presses on a marker (no accidental seeks).
 
-  const onMark = (e) => e.target.closest?.(".tbc-mark");
+  const onMark = (e) => e.target.closest?.(".tbc-mark:not(.tbc-mark--live)");
 
   window.addEventListener("contextmenu", (e) => {
     if (!videoId || !duration()) return;
@@ -395,23 +404,8 @@
       live.marks.push(mark);
       live.marks.sort((a, b) => a.t - b.t);
       saveLive();
-      renderLiveButton();
-      const r = button.getBoundingClientRect();
-      openEditor({
-        x: r.left + r.width / 2,
-        y: r.top,
-        title: `Marked ${formatTime(t)} into the stream`,
-        note: "",
-        onSave: (note) => {
-          mark.note = note;
-          saveLive();
-        },
-        onRemove: () => {
-          live.marks = live.marks.filter((m) => m.id !== mark.id);
-          saveLive();
-          renderLiveButton();
-        },
-      });
+      render();
+      openList(button, mark.id);
     });
   }
 
@@ -437,20 +431,19 @@
       const count = b.querySelector(".tbc-live-mark__count");
       if (count.textContent !== (n ? String(n) : "")) count.textContent = n ? String(n) : "";
       const title = isVod
-        ? `Mark this moment${n ? ` (${n} markers)` : ""}\nRight-click for the list of markers`
-        : `Mark this moment${n ? ` (${n} marked this stream)` : ""}\nMarks show up on this stream's VOD later\nRight-click for the list`;
+        ? `Mark this moment and show your markers${n ? ` (${n})` : ""}\nRight-click for just the list`
+        : `Mark this moment and show your marks${n ? ` (${n} this stream)` : ""}\nMarks show up on this stream's VOD later\nRight-click for just the list`;
       if (b.title !== title) b.title = title;
     });
     if (list) fillList();
   }
 
-  // Click: mark right where you are. Right-click: the list of marks.
+  // Click: mark right where you are and show the list. Right-click: just the list.
   window.addEventListener("click", (e) => {
     const b = e.target.closest?.(".tbc-live-mark");
     if (!b) return;
     e.preventDefault();
     e.stopPropagation();
-    closeList();
     if (videoId) markVodNow(b);
     else markLiveNow(b);
   }, true);
@@ -464,11 +457,149 @@
     else liveRecord(() => toggleList(b));
   }, true);
 
+  // ===== Live timeline =================================================================
+
+  const isLiveNow = () => !videoId && !!channelName() && uptime() != null;
+
+  // Where live marks go in each player: Twitch's rewind bar if it has one,
+  // otherwise our own line (added here, and removed again once Twitch's shows up).
+  function liveTrack(controls) {
+    const player = controls.closest('[data-a-target="video-player"], .video-player') || controls.parentElement;
+    const twitch = player?.querySelector(`${SEEKBAR} ${BAR}`) || player?.querySelector(SEEKBAR);
+    let ours = controls.querySelector(":scope > .tbc-livebar");
+    if (twitch) {
+      ours?.remove();
+      return twitch;
+    }
+    if (!ours) {
+      ours = document.createElement("div");
+      ours.className = "tbc-livebar";
+      ours.innerHTML = '<div class="tbc-livebar__track"></div>';
+      controls.prepend(ours);
+    }
+    return ours.firstElementChild;
+  }
+
+  function renderLiveBar() {
+    const up = isLiveNow() ? uptime() : null;
+    const marks = live && live.channel === channelName() ? live.marks : [];
+    document.querySelectorAll(".player-controls").forEach((controls) => {
+      if (!up) {
+        controls.querySelector(":scope > .tbc-livebar")?.remove();
+        controls.closest('[data-a-target="video-player"], .video-player')
+          ?.querySelectorAll(".tbc-marks--live").forEach((l) => l.remove());
+        return;
+      }
+      const track = liveTrack(controls);
+      let layer = track.querySelector(":scope > .tbc-marks--live");
+      if (!layer) {
+        layer = document.createElement("div");
+        layer.className = "tbc-marks tbc-marks--live";
+        track.append(layer);
+      }
+      // Rebuilt only when the marks change; positions move with the stream's length.
+      const key = JSON.stringify(marks);
+      if (layer.dataset.key !== key) {
+        layer.dataset.key = key;
+        layer.textContent = "";
+        for (const m of marks) {
+          const el = document.createElement("div");
+          el.className = "tbc-mark tbc-mark--live" + (m.note ? " tbc-mark--noted" : "");
+          el.dataset.id = m.id;
+          el.dataset.t = m.t;
+          el.title = `${m.note ? `${formatTime(m.t)}: ${m.note}` : formatTime(m.t)}\nClick to edit or remove`;
+          layer.append(el);
+        }
+      }
+      for (const el of layer.children) el.style.left = Math.min(100, (el.dataset.t / up) * 100) + "%";
+    });
+  }
+
+  // The live timeline under the mouse, if any: ours, or Twitch's rewind bar.
+  function liveTrackAt(target) {
+    if (!isLiveNow()) return null;
+    const ours = target.closest?.(".tbc-livebar");
+    if (ours) return ours.querySelector(".tbc-livebar__track");
+    const twitch = target.closest?.(SEEKBAR);
+    return twitch ? twitch.querySelector(BAR) || twitch : null;
+  }
+
+  // Seconds into the stream at a screen x position on the live timeline.
+  function liveTimeAt(track, clientX) {
+    const r = track.getBoundingClientRect();
+    return Math.round(Math.min(1, Math.max(0, (clientX - r.left) / r.width)) * (uptime() || 0));
+  }
+
+  function editLiveMark(id, x, y) {
+    const m = live?.marks.find((k) => k.id === id);
+    if (!m) return;
+    openEditor({
+      x, y,
+      title: `Marked ${formatTime(m.t)} into the stream`,
+      note: m.note,
+      onSave: (note) => {
+        if (m.note === note) return;
+        m.note = note;
+        saveLive();
+        render();
+      },
+      onRemove: () => {
+        live.marks = live.marks.filter((k) => k.id !== id);
+        saveLive();
+        render();
+      },
+    });
+  }
+
+  // Hovering our line shows the time under the mouse (Twitch's bar has its own).
+  window.addEventListener("mousemove", (e) => {
+    const track = e.target.closest?.(".tbc-livebar__track");
+    if (track && !e.target.closest(".tbc-mark")) {
+      track.title = `${formatTime(liveTimeAt(track, e.clientX))} into the stream\nRight-click to mark this moment`;
+    }
+  }, true);
+
+  window.addEventListener("contextmenu", (e) => {
+    const mark = e.target.closest?.(".tbc-mark--live");
+    const track = mark ? null : liveTrackAt(e.target);
+    if (!mark && !track) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (mark) return editLiveMark(mark.dataset.id, e.clientX, e.clientY);
+    const t = liveTimeAt(track, e.clientX);
+    const { clientX: x, clientY: y } = e;
+    liveRecord(() => {
+      const m = { id: newId(), t, note: "" };
+      live.marks.push(m);
+      live.marks.sort((a, b) => a.t - b.t);
+      saveLive();
+      render();
+      editLiveMark(m.id, x, y);
+    });
+  }, true);
+
+  // Clicks on our line and on live marks stay off Twitch's player (no pausing,
+  // no seeking); a click on a mark opens it.
+  for (const type of ["pointerdown", "pointerup", "mousedown", "mouseup", "click"]) {
+    window.addEventListener(type, (e) => {
+      if (!e.target.closest?.(".tbc-livebar, .tbc-mark--live")) return;
+      e.stopPropagation();
+      const mark = e.target.closest(".tbc-mark--live");
+      if (type === "click" && mark) editLiveMark(mark.dataset.id, e.clientX, e.clientY);
+    }, true);
+  }
+
+  // The stream keeps getting longer: slide the marks back along the timeline.
+  setInterval(() => {
+    if (alive() && document.querySelector(".tbc-marks--live")) renderLiveBar();
+  }, 5000);
+
   // ===== Marker list ===================================================================
   // A pop-up above the bookmark button listing every marker (time, and note in
-  // small text). On a VOD, click one to jump there; live marks just list.
+  // small text), the one just made lit up. On a VOD, click one to jump there;
+  // live, click one to give it a note. × deletes a marker.
 
-  let list = null; // { el, button }
+  let list = null; // { el, button, fresh }
 
   function closeList() {
     if (!list) return;
@@ -478,7 +609,17 @@
 
   function toggleList(button) {
     if (list) return closeList();
+    openList(button);
+  }
+
+  // Open the list (or keep it open), lighting up the marker just made.
+  function openList(button, fresh) {
     closeEditor(true);
+    if (list) {
+      list.button = button;
+      list.fresh = fresh;
+      return fillList();
+    }
     const el = document.createElement("div");
     el.className = "tbc-marklist";
     el.addEventListener("keydown", (e) => {
@@ -486,15 +627,27 @@
       if (e.key === "Escape") closeList();
     });
     (document.fullscreenElement || document.body).append(el);
-    list = { el, button };
+    list = { el, button, fresh };
     fillList();
   }
 
+  function removeMark(isVod, id) {
+    if (isVod) {
+      vod.marks = vod.marks.filter((k) => k.id !== id);
+      if (!vod.removed.includes(id)) vod.removed.push(id); // don't re-import it from the live copy
+      saveVod();
+    } else if (live) {
+      live.marks = live.marks.filter((k) => k.id !== id);
+      saveLive();
+    }
+    render();
+  }
+
   function fillList() {
-    const { el, button } = list;
+    const { el, button, fresh } = list;
     const isVod = !!videoId;
     const marks = isVod ? vod.marks : live?.marks || [];
-    const key = (isVod ? "vod" : "live") + JSON.stringify(marks);
+    const key = (isVod ? "vod" : "live") + fresh + JSON.stringify(marks);
     if (el.dataset.key !== key) {
       el.dataset.key = key;
       el.textContent = "";
@@ -519,6 +672,8 @@
       const items = document.createElement("div");
       items.className = "tbc-marklist__items";
       for (const m of marks) {
+        const row = document.createElement("div");
+        row.className = "tbc-marklist__row" + (m.id === fresh ? " tbc-marklist__row--new" : "");
         const item = document.createElement("button");
         item.type = "button";
         item.className = "tbc-marklist__item";
@@ -540,9 +695,22 @@
             closeList();
           });
         } else {
-          item.title = `${formatTime(m.t)} into the stream: shows on the VOD later`;
+          item.title = `${formatTime(m.t)} into the stream: shows on the VOD later\nClick to add or change its note`;
+          item.addEventListener("click", () => {
+            const r = item.getBoundingClientRect();
+            const id = m.id;
+            closeList();
+            editLiveMark(id, r.left + r.width / 2, r.top);
+          });
         }
-        items.append(item);
+        const x = document.createElement("button");
+        x.type = "button";
+        x.className = "tbc-marklist__delete";
+        x.textContent = "×";
+        x.title = `Delete the marker at ${formatTime(m.t)}`;
+        x.addEventListener("click", () => removeMark(isVod, m.id));
+        row.append(item, x);
+        items.append(row);
       }
       el.append(items);
     }
@@ -553,19 +721,19 @@
     el.style.top = Math.max(8, r.top - el.offsetHeight - 8) + "px";
   }
 
-  // Add a marker where the video is now, then ask for a note.
+  // Add a marker where the video is now, then show the list with it lit up.
   function markVodNow(button) {
     const v = video();
     if (!v) return;
     const t = Math.round(v.currentTime * 10) / 10;
-    closeList();
-    if (!vod.marks.some((m) => Math.abs(m.t - t) < 1)) {
-      vod.marks.push({ id: newId(), t, note: "" });
+    let mark = vod.marks.find((m) => Math.abs(m.t - t) < 1);
+    if (!mark) {
+      mark = { id: newId(), t, note: "" };
+      vod.marks.push(mark);
       saveVod();
       render();
     }
-    const r = button.getBoundingClientRect();
-    editVodMark(vod.marks.findIndex((m) => Math.abs(m.t - t) < 1), r.left + r.width / 2, r.top);
+    openList(button, mark.id);
   }
 
   // Clicking anywhere outside the list (other than its button) closes it.

@@ -43,6 +43,7 @@ function apply(input) {
 function scan() {
   document.querySelectorAll(SLIDER).forEach(apply);
   document.querySelectorAll(GROUP).forEach(addOnePercent);
+  document.querySelectorAll(".video-player__overlay").forEach(addPauseZone);
 }
 
 new MutationObserver(scan).observe(document.documentElement, {
@@ -102,10 +103,14 @@ document.addEventListener("mouseleave", () => {
 // --- Click to pause/play ------------------------------------------------------
 // Clicking anywhere on the video toggles playback. A double-click is left alone
 // so Twitch's double-click-to-fullscreen still works. Where Twitch already does
-// this itself (VODs), it's left to Twitch.
+// this itself (VODs), it's left to Twitch. Clicks on Twitch extensions on the
+// video (Tangia, Crowd Control and the like: their icons on the right, the
+// panels they open, their pop-ups) are left alone too; those are plain boxes
+// rather than buttons, so they need naming here.
 const PLAY_PAUSE = '[data-a-target="player-play-pause-button"]';
 const IGNORE = 'button, a, input, textarea, select, label, [role="button"], [role="slider"], .tbc-editor, ' +
-  '[role="menu"], [role="menuitem"], [role="dialog"], .player-controls, [data-a-target="player-settings-menu"]';
+  '[role="menu"], [role="menuitem"], [role="dialog"], .player-controls, [data-a-target="player-settings-menu"], .tbc-pausezone, ' +
+  '[class*="extensions-"], [class*="extension-"], iframe';
 const DOUBLE_CLICK_MS = 250;
 
 let pending = 0;
@@ -126,14 +131,77 @@ document.addEventListener("click", (e) => {
   const r = video.getBoundingClientRect();
   if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
 
+  clicked(player, video, e.detail);
+}, true);
+
+function clicked(player, video, detail) {
   clearTimeout(pending);
-  if (e.detail > 1) return; // second click of a double-click: cancel the toggle
+  if (detail > 1) return; // second click of a double-click: cancel the toggle
   // Twitch pauses VODs on click by itself (but not live streams). If it already
   // has by the time we'd act, leave it, or we'd undo it.
   const wasPaused = video.paused;
   pending = setTimeout(() => {
     if (video.paused === wasPaused) toggle(player);
   }, DOUBLE_CLICK_MS);
+}
+
+// Clicks on Twitch extensions laid over the video (Tangia, Crowd Control and
+// the like). Each runs in its own frame over the whole video, so its clicks
+// never reach this page; but Twitch's frame around it reports every click here,
+// with the tag and classes of what was clicked. A click on the extension's
+// empty, see-through background (its page or its outermost box) pauses or
+// plays; a click on anything it draws stays with the extension. Two quick
+// clicks on the background go fullscreen, like on the plain video.
+const EXT_BACKGROUND = /^(html|body|twitch-container|root|app|container|wrapper|overlay|main|content)$/i;
+let lastExtClick = 0;
+
+window.addEventListener("message", (e) => {
+  if (e.origin !== "https://supervisor.ext-twitch.tv") return;
+  const p = e.data?.action === "twitch-ext-user-action" && e.data.payload;
+  if (!p || p.type !== "click") return;
+  const tag = (p.elementTag || "").toUpperCase();
+  const classes = (p.elementClass || "").trim().split(/\s+/).filter(Boolean);
+  const background = tag === "HTML" || tag === "BODY" ||
+    (/^(DIV|MAIN|SECTION)$/.test(tag) && classes.length && classes.every((c) => EXT_BACKGROUND.test(c)));
+  if (!background) return;
+  const frame = [...document.querySelectorAll("iframe")].find((f) => f.contentWindow === e.source);
+  const player = frame?.closest(PLAYER);
+  const video = player?.querySelector("video");
+  if (!video) return;
+  const now = Date.now();
+  const double = now - lastExtClick < DOUBLE_CLICK_MS * 1.6;
+  lastExtClick = double ? 0 : now;
+  clicked(player, video, double ? 2 : 1);
+  if (double) player.querySelector('[data-a-target="player-fullscreen-button"]')?.click();
+});
+
+// --- Pause corner ---------------------------------------------------------------
+// A click spot in the video's bottom-left corner, just above the controls, that
+// always pauses or plays. It sits on top of any extension laid over the video
+// (Tangia, Crowd Control...), so it works even where clicks on the rest of the
+// video go to the extension; only that corner of the extension can't be clicked.
+// Hovering it shows a faint play/pause sign. Uses no top-level constants: scan()
+// calls it while the page loads, before the ones below exist.
+function addPauseZone(overlay) {
+  if (overlay.querySelector(":scope > .tbc-pausezone")) return;
+  const zone = document.createElement("div");
+  zone.className = "tbc-pausezone";
+  zone.title = "Pause / play";
+  zone.innerHTML = '<svg viewBox="0 0 20 20" width="22" height="22" aria-hidden="true"><path d="M3 4l7 6-7 6z" fill="currentColor"/><path d="M12 4h2v12h-2zM16 4h2v12h-2z" fill="currentColor"/></svg>';
+  overlay.append(zone);
+}
+
+document.addEventListener("click", (e) => {
+  const zone = e.target.closest?.(".tbc-pausezone");
+  if (!zone) return;
+  e.preventDefault();
+  e.stopPropagation();
+  clearTimeout(pending);
+  const player = zone.closest(PLAYER);
+  if (player) toggle(player);
+}, true);
+document.addEventListener("dblclick", (e) => {
+  if (e.target.closest?.(".tbc-pausezone")) e.stopPropagation();
 }, true);
 
 // --- 1% volume button ---------------------------------------------------------

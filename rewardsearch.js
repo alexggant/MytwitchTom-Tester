@@ -5,6 +5,12 @@
 // The panel only shows reward names, so descriptions are looked up from Twitch
 // (public, no login needed) once per channel and kept for a few minutes.
 //
+// Each channel points reward also gets a star (top-right corner, shown on
+// hover) to make it a favorite. Favorites move up under a "Favorites" heading,
+// below Power-ups and the watch streak, right above the channel's other
+// rewards; per channel, and they stay next time. Saved in chrome.storage.local
+// as "starredRewards": { channel: [reward titles] }.
+//
 // Wrapped so its names don't clash with the other scripts.
 (() => {
   const LIST = ".rewards-list";
@@ -13,6 +19,18 @@
 
   const prompts = {}; // channel -> { at, byTitle: { title: description } }
   let query = "";
+  let starred = {}; // channel -> [titles]
+  chrome.storage.local.get("starredRewards", (d) => {
+    starred = d.starredRewards || {};
+    const list = document.querySelector(LIST);
+    if (list) applyStars(list);
+  });
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local" || !changes.starredRewards) return;
+    starred = changes.starredRewards.newValue || {};
+    const list = document.querySelector(LIST);
+    if (list) applyStars(list);
+  });
 
   function channelName() {
     const parts = location.pathname.split("/").filter(Boolean);
@@ -56,6 +74,10 @@
     let shown = 0;
     for (const child of list.children) {
       if (child === box) continue;
+      if (child.matches(".tbc-rstar-head, .tbc-rstar-end")) {
+        child.classList.toggle("tbc-rsearch-hide", !!words.length);
+        continue;
+      }
       const item = child.matches(ITEM) ? child : child.querySelector(ITEM);
       if (!words.length) {
         child.classList.remove("tbc-rsearch-hide");
@@ -77,6 +99,82 @@
       const count = box.querySelector(".tbc-rsearch__count");
       const text = words.length ? (shown ? `${shown} found` : "No matches") : "";
       if (count.textContent !== text) count.textContent = text;
+    }
+  }
+
+  // ===== Stars ======================================================================
+
+  const STAR = '<svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M10 1.8l2.5 5.3 5.8.7-4.3 4 1.1 5.7L10 14.7l-5.1 2.8 1.1-5.7-4.3-4 5.8-.7z"/></svg>';
+
+  function isStarred(title) {
+    return (starred[channelName()] || []).includes(title);
+  }
+
+  function toggleStar(title) {
+    const channel = channelName();
+    if (!channel) return;
+    const set = starred[channel] || [];
+    starred = { ...starred, [channel]: set.includes(title) ? set.filter((t) => t !== title) : [...set, title] };
+    if (!starred[channel].length) delete starred[channel];
+    try {
+      chrome.storage.local.set({ starredRewards: starred });
+    } catch {}
+    const list = document.querySelector(LIST);
+    if (list) applyStars(list);
+  }
+
+  // A star on every reward, and favorites moved up above the other rewards. The
+  // list is a wrapping row, so CSS "order" moves them without touching Twitch's
+  // elements: everything up to the first reward keeps its place (order 0), then
+  // the Favorites heading (1), favorites (2), a dividing line (3), the rest (4).
+  function applyStars(list) {
+    let any = false;
+    let reached = false; // past the first reward
+    for (const child of list.children) {
+      if (child.matches(".tbc-rstar-head, .tbc-rstar-end, .tbc-rsearch")) continue;
+      const item = child.matches(ITEM) ? child : child.querySelector(ITEM);
+      reached ||= !!item;
+      if (child.classList.contains("tbc-rafter") !== (reached && !(item && isStarred(titleOf(item))))) {
+        child.classList.toggle("tbc-rafter");
+      }
+      if (!item) continue;
+      const title = titleOf(item);
+      const on = isStarred(title);
+      any ||= on;
+      let star = child.querySelector(":scope > .tbc-rstar");
+      if (!star) {
+        star = document.createElement("button");
+        star.type = "button";
+        star.className = "tbc-rstar";
+        star.innerHTML = STAR;
+        star.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleStar(star.dataset.title);
+        });
+        child.classList.add("tbc-rstar-host");
+        child.append(star);
+      }
+      if (star.dataset.title !== title) star.dataset.title = title;
+      if (star.classList.contains("tbc-rstar--on") !== on) {
+        star.classList.toggle("tbc-rstar--on", on);
+        star.title = on ? "Remove from favorites" : "Favorite: show this one first";
+      }
+      if (child.classList.contains("tbc-rstarred") !== on) child.classList.toggle("tbc-rstarred", on);
+    }
+    // The Favorites heading, and a line after the favorites so the other
+    // rewards start on a row of their own.
+    let head = list.querySelector(":scope > .tbc-rstar-head");
+    if (any && !head) {
+      head = document.createElement("div");
+      head.className = "tbc-rstar-head";
+      head.textContent = "Favorites";
+      const end = document.createElement("div");
+      end.className = "tbc-rstar-end";
+      list.append(head, end);
+    } else if (!any && head) {
+      head.remove();
+      list.querySelector(":scope > .tbc-rstar-end")?.remove();
     }
   }
 
@@ -112,7 +210,7 @@
   let wasOpen = false;
   const observer = new MutationObserver((mutations) => {
     // Ignore changes inside the search box itself (its count updating).
-    if (mutations.every((m) => m.target.closest?.(".tbc-rsearch") || m.target.parentElement?.closest(".tbc-rsearch"))) return;
+    if (mutations.every((m) => m.target.closest?.(".tbc-rsearch, .tbc-rstar") || m.target.parentElement?.closest(".tbc-rsearch, .tbc-rstar"))) return;
     try {
       if (!chrome.runtime?.id) return observer.disconnect();
     } catch {
@@ -129,6 +227,7 @@
     const channel = channelName();
     if (channel) loadPrompts(channel);
     addBox(list);
+    applyStars(list);
     if (query) filter();
   });
   observer.observe(document.documentElement, { childList: true, subtree: true });

@@ -12,8 +12,13 @@
 // picker whenever it's open (and from your pinned emotes), so an emote shows as
 // a picture once you've had the picker open in a channel where you can use it.
 //
+// Above the phrases, a small "Highlight words" section: words to box in chat like
+// your username (myname.js does the boxing), shown as chips with ×, plus a slim
+// box to add one.
+//
 // Saved in chrome.storage.local:
 //   "quickPhrases" [text]
+//   "highlightWords" [words]
 //   "emoteImages"  { emoteName: pictureUrl }
 //
 // Wrapped so its names don't clash with the other scripts.
@@ -25,6 +30,7 @@
   const BUBBLE_PATH = "M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-5 4v-4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm0 2v12.2L8.3 16H20V6H4Zm3 3h10v2H7V9Zm0 3h7v2H7v-2Z";
 
   let phrases = [];
+  let highlights = []; // words boxed in chat (myname.js)
   let panel = null;
   let picking = false; // the emote picker is open for adding to a phrase
   let images = {};      // emote name -> picture url
@@ -42,6 +48,7 @@
     phrases = d.quickPhrases || ["Are we winning?"];
     if (!d.quickPhrases && alive()) chrome.storage.local.set({ quickPhrases: phrases });
   });
+  chrome.storage.local.get("highlightWords", (d) => (highlights = d.highlightWords || []));
   chrome.storage.local.get("emoteImages", (d) => (images = { ...images, ...(d.emoteImages || {}) }));
   // Pinned emotes (pins.js) are saved by ID, so their pictures are known even
   // before the picker has been opened.
@@ -54,7 +61,8 @@
     if (area !== "local") return;
     if (changes.emoteImages) images = changes.emoteImages.newValue || {};
     if (changes.quickPhrases) phrases = changes.quickPhrases.newValue || [];
-    if (panel && (changes.quickPhrases || changes.emoteImages)) fill();
+    if (changes.highlightWords) highlights = changes.highlightWords.newValue || [];
+    if (panel && (changes.quickPhrases || changes.emoteImages || changes.highlightWords)) fill();
   });
 
   // Note the picture of every emote showing in Twitch's picker.
@@ -168,7 +176,7 @@
       images[name] = pic;
       if (alive()) chrome.storage.local.set({ emoteImages: images });
     }
-    const input = panel.querySelector(".tbc-phrases__new");
+    const input = panel.querySelector(".tbc-phrases__new:not(.tbc-phrases__hlnew)");
     if (!name || !input) return;
     input.value = (input.value && !/\s$/.test(input.value) ? input.value + " " : input.value) + name + " ";
   }, true);
@@ -184,14 +192,16 @@
     }
     document.body.append(panel);
     fill();
-    panel.querySelector(".tbc-phrases__new").focus();
+    panel.querySelector(".tbc-phrases__new:not(.tbc-phrases__hlnew)").focus();
   }
 
   function fill() {
-    const draft = panel.querySelector(".tbc-phrases__new")?.value || "";
+    const draft = panel.querySelector(".tbc-phrases__new:not(.tbc-phrases__hlnew)")?.value || "";
+    const hlDraft = panel.querySelector(".tbc-phrases__hlnew")?.value || "";
     panel.textContent = "";
+    fillHighlights(hlDraft);
     const head = document.createElement("div");
-    head.className = "tbc-phrases__head";
+    head.className = "tbc-phrases__head tbc-phrases__head--sub";
     head.textContent = "Quick phrases";
     panel.append(head);
 
@@ -253,10 +263,67 @@
       input.value = "";
       save();
       fill();
-      panel.querySelector(".tbc-phrases__new").focus();
+      panel.querySelector(".tbc-phrases__new:not(.tbc-phrases__hlnew)").focus();
     });
     panel.append(add);
     place();
+  }
+
+  // ===== Highlight words ============================================================
+
+  function saveHighlights() {
+    if (alive()) chrome.storage.local.set({ highlightWords: highlights });
+  }
+
+  function fillHighlights(draft) {
+    const box = document.createElement("div");
+    box.className = "tbc-hl";
+    const head = document.createElement("div");
+    head.className = "tbc-phrases__head";
+    head.textContent = "Highlight words";
+    head.title = "Boxed in chat like your username, whole words only";
+    box.append(head);
+
+    const chips = document.createElement("div");
+    chips.className = "tbc-hl__chips";
+    for (const word of highlights) {
+      const chip = document.createElement("span");
+      chip.className = "tbc-me tbc-hl__chip";
+      chip.textContent = word;
+      const x = document.createElement("button");
+      x.type = "button";
+      x.className = "tbc-hl__x";
+      x.textContent = "×";
+      x.title = `Stop highlighting "${word}"`;
+      x.addEventListener("click", () => {
+        highlights = highlights.filter((w) => w !== word);
+        saveHighlights();
+        fill();
+      });
+      chip.append(x);
+      chips.append(chip);
+    }
+
+    const add = document.createElement("form");
+    add.className = "tbc-hl__add";
+    add.innerHTML =
+      `<input class="tbc-phrases__new tbc-phrases__hlnew" type="text" maxlength="40" placeholder="+ word" spellcheck="false" autocomplete="off">`;
+    const input = add.querySelector("input");
+    input.value = draft;
+    input.title = "Type a word and press Enter";
+    add.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const word = input.value.trim();
+      if (!word) return;
+      if (!highlights.some((w) => w.toLowerCase() === word.toLowerCase())) highlights = [...highlights, word];
+      input.value = "";
+      saveHighlights();
+      fill();
+      panel.querySelector(".tbc-phrases__hlnew").focus();
+    });
+    chips.append(add);
+    box.append(chips);
+    panel.append(box);
   }
 
   // Show a phrase with its emotes as pictures (words we have a picture for).

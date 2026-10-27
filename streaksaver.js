@@ -1,7 +1,7 @@
 // Auto Streak Saver. When Twitch's left sidebar shows "Save your Streak" (a
 // channel whose watch streak is at risk, linking to one of its VODs), this opens
 // that VOD in a small separate window, sets the volume to 1%, plays it until
-// Twitch says the streak has been saved, plays 45 seconds more, and closes.
+// Twitch says the streak has been saved, plays 20 seconds more, and closes.
 //
 // Three pills above the "Save your Streak" row pick how it behaves:
 //   Auto Saver    runs by itself whenever "Save your Streak" appears (and when clicked)
@@ -9,7 +9,7 @@
 //   Off           does nothing; the row works like normal Twitch
 //
 // It counts as saved when Twitch says so ("Your … streak … is saved!"). If that
-// hasn't happened by the usual time it takes plus 45 seconds, it gives up and
+// hasn't happened by the usual time it takes plus 20 seconds, it gives up and
 // your Twitch tab shows a pop-up saying so.
 //
 // background.js opens and closes the saver window (pages can't open windows
@@ -29,7 +29,7 @@
   const ROW = 'a[class*="saveYourStreakSideNavRow"]';
   const AT_RISK = '[role="group"][aria-label="Watch Streaks at risk"]';
   const STORIES = '[class*="storiesLeftNavSection"]';
-  const EXTRA_MS = 45 * 1000;              // keep playing this long after it's saved
+  const EXTRA_MS = 20 * 1000;              // keep playing this long after it's saved
   const USUAL_SAVE_MS = 5 * 60 * 1000;     // how long Twitch usually takes (it took ~5 min in testing)
   const GIVE_UP_MS = USUAL_SAVE_MS + EXTRA_MS; // no "saved" by then: give up and say so
   const REDO_AFTER_MS = 6 * 60 * 60 * 1000; // don't auto-save the same channel again for this long
@@ -263,7 +263,7 @@
         await wait(1000);
       }
     } else {
-      // The usual time plus 45 seconds has passed with no "saved": tell your Twitch tab.
+      // The usual time plus 20 seconds has passed with no "saved": tell your Twitch tab.
       overlay("Twitch be twitching. Tom did his best, but you can take it up with Bezos.");
       getState((s) => {
         if (alive()) chrome.storage.local.set({ streakSaverFailed: { channel: s.running?.channel || "this channel", at: Date.now() } });

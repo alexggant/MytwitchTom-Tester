@@ -566,7 +566,7 @@ html.tbc-peek [role="dialog"][aria-labelledby="channel-points-reward-center-head
   background: rgba(169, 112, 255, 0.45);
 }
 
-/* VOD marker list (vodmarks.js): pops up above the bookmark button. */
+/* Marker list (vodmarks.js): pops up above the bookmark button, live or VOD. */
 .tbc-marklist {
   position: fixed;
   z-index: 10000;
@@ -606,7 +606,38 @@ html.tbc-peek [role="dialog"][aria-labelledby="channel-points-reward-center-head
   display: flex;
   flex-direction: column;
 }
+.tbc-marklist__row {
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+}
+.tbc-marklist__row:hover {
+  background: #2f2f35;
+}
+.tbc-marklist__row--new {
+  background: rgba(255, 179, 26, 0.14);
+  box-shadow: inset 2px 0 0 #ffb31a;
+}
+.tbc-marklist__delete {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin-right: 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: #adadb8;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.tbc-marklist__delete:hover {
+  background: rgba(235, 4, 0, 0.25);
+  color: #fff;
+}
 .tbc-marklist__item {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -619,9 +650,6 @@ html.tbc-peek [role="dialog"][aria-labelledby="channel-points-reward-center-head
   font: inherit;
   text-align: left;
   cursor: pointer;
-}
-.tbc-marklist__item:hover {
-  background: #2f2f35;
 }
 .tbc-marklist__time {
   color: #ffb31a;
@@ -1195,4 +1223,299 @@ html.tbc-peek [role="dialog"][aria-labelledby="channel-points-reward-center-head
 .tbc-split__audio-btn--on:hover {
   background: #a970ff;
   color: #fff;
+}
+
+/* Pinned Channels list at the top of the left sidebar, and the Pin button
+   next to Follow on a channel's page (pinchannels.js). Rows are a bit
+   smaller than Twitch's own sidebar rows. */
+.tbc-pinned {
+  margin-bottom: 4px;
+}
+.tbc-pinned__head {
+  padding: 10px 10px 4px;
+  color: #efeff1;
+  font-size: 14px;
+  font-weight: 600;
+}
+.tbc-pinned__row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 10px;
+  color: #efeff1;
+  text-decoration: none;
+}
+.tbc-pinned__row:hover {
+  background: rgba(83, 83, 95, 0.38);
+  color: #efeff1;
+  text-decoration: none;
+}
+.tbc-pinned__avatar {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #35353b;
+  object-fit: cover;
+}
+.tbc-pinned__row:not(.tbc-pinned__row--live) .tbc-pinned__avatar {
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+.tbc-pinned__text {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.25;
+}
+.tbc-pinned__name,
+.tbc-pinned__sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tbc-pinned__name {
+  font-size: 13px;
+  font-weight: 600;
+}
+.tbc-pinned__row:not(.tbc-pinned__row--live) .tbc-pinned__name {
+  color: #adadb8;
+}
+.tbc-pinned__sub {
+  color: #adadb8;
+  font-size: 11.5px;
+}
+.tbc-pinned__status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #efeff1;
+}
+.tbc-pinned__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #eb0400;
+}
+.tbc-pinned__unpin {
+  display: none;
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: #adadb8;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.tbc-pinned__unpin:hover {
+  color: #efeff1;
+}
+.tbc-pinned__row:hover .tbc-pinned__status {
+  display: none;
+}
+.tbc-pinned__row:hover .tbc-pinned__unpin {
+  display: block;
+}
+/* Collapsed sidebar: just the pictures. */
+.side-nav--collapsed .tbc-pinned__head,
+.side-nav--collapsed .tbc-pinned__text,
+.side-nav--collapsed .tbc-pinned__status,
+.side-nav--collapsed .tbc-pinned__unpin {
+  display: none !important;
+}
+.side-nav--collapsed .tbc-pinned__row {
+  justify-content: center;
+  padding: 4px 0;
+}
+.tbc-pinbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  margin-right: 10px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 4px;
+  background: rgba(83, 83, 95, 0.38);
+  color: #efeff1;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tbc-pinbtn:hover {
+  background: rgba(83, 83, 95, 0.55);
+}
+.tbc-pinbtn--on {
+  color: #bf94ff;
+}
+
+/* Your own name in chat: your username on your messages, and when someone
+   else writes it (myname.js). A box in your chat-name colour. */
+.tbc-me {
+  padding: 1px 5px;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tbc-me-color, currentColor) 75%, transparent);
+  background: color-mix(in srgb, var(--tbc-me-color, currentColor) 18%, transparent);
+}
+
+/* Pause corner: the bottom-left quarter of the video, above the controls, on top of
+   any extension laid over the video (content.js). Shows itself on hover. */
+.tbc-pausezone {
+  position: absolute;
+  left: 0;
+  bottom: 76px; /* above the controls and the live timeline */
+  z-index: 3;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  width: 50%;
+  height: calc(50% - 38px);
+  padding: 10px;
+  box-sizing: border-box;
+  color: transparent;
+  cursor: pointer;
+}
+.tbc-pausezone:hover {
+  color: rgba(255, 255, 255, 0.55);
+  background: radial-gradient(circle at 0 100%, rgba(0, 0, 0, 0.3), transparent 70%);
+}
+/* Not on VODs: their seek bar sits where the corner would start, and they
+   have no extension overlays, so a click anywhere on the video already works. */
+.video-player__overlay:has([data-a-target="player-seekbar"]) > .tbc-pausezone {
+  display: none;
+}
+
+/* Live timeline above the player controls, styled like Twitch's purple VOD
+   seek bar: start of the stream on the left, now on the right, your marks as
+   orange pins (vodmarks.js). */
+.tbc-livebar {
+  padding: 10px 10px 2px;
+}
+.tbc-livebar__track {
+  position: relative;
+  height: 4px;
+  border-radius: 2px;
+  background: #9147ff; /* Twitch's purple, like the seek bar on VODs */
+  cursor: crosshair;
+}
+.tbc-livebar__track::after {
+  /* A taller invisible strip, so the thin line is easy to hit. */
+  content: "";
+  position: absolute;
+  inset: -8px 0;
+}
+.tbc-livebar .tbc-mark {
+  bottom: -4px;
+  height: 12px;
+}
+.tbc-livebar .tbc-mark::before {
+  top: -10px;
+  width: 10px;
+  height: 10px;
+  left: -4px;
+}
+
+/* Favorite rewards (rewardsearch.js): a star in each reward's top-right corner
+   (shown on hover, always shown once a favorite), and favorites moved up under
+   a "Favorites" heading, below Power-ups and the watch streak, with a line
+   between them and the other rewards. The list is a wrapping row, so "order" does the moving. */
+.tbc-rsearch {
+  order: -1;
+}
+.tbc-rstar-head {
+  order: 1;
+  width: 100%;
+  padding: 4px 0 6px;
+  color: #efeff1;
+  font-size: 13px;
+  font-weight: 600;
+}
+.tbc-rstarred {
+  order: 2;
+}
+.tbc-rstar-end {
+  order: 3;
+  width: 100%;
+  height: 1px;
+  margin: 2px 0 10px;
+  background: #3a3a3d;
+}
+.tbc-rafter {
+  order: 4;
+}
+.tbc-rstar-host {
+  position: relative;
+}
+.tbc-rstar {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  z-index: 2;
+  display: flex;
+  padding: 3px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #efeff1;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+  opacity: 0;
+  cursor: pointer;
+}
+.tbc-rstar-host:hover .tbc-rstar {
+  opacity: 1;
+}
+.tbc-rstar svg {
+  fill: inherit;
+  stroke: inherit;
+}
+.tbc-rstar--on {
+  opacity: 1;
+  color: #ffb31a;
+  fill: #ffb31a;
+}
+
+/* "Highlight words" at the top of the quick phrases pop-up (phrases.js): small,
+   the words as chips with ×, and a slim box to add one. */
+.tbc-hl .tbc-phrases__head {
+  margin-bottom: 4px;
+}
+.tbc-hl__chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
+.tbc-hl__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+}
+.tbc-hl__x {
+  padding: 0 0 0 2px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: 13px;
+  line-height: 1;
+  opacity: 0.6;
+  cursor: pointer;
+}
+.tbc-hl__x:hover {
+  opacity: 1;
+}
+.tbc-hl__add .tbc-phrases__hlnew {
+  width: 80px;
+  padding: 2px 6px;
+  font-size: 12px;
+}
+.tbc-phrases__head--sub {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #2f2f35;
 }
