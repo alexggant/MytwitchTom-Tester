@@ -48,6 +48,20 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     return true; // reply comes later
   }
 
+  // Your recent whispers, for Ask the Streamer (askstreamer.js). Asked from
+  // here because a page's own scripts can't send your sign-in to Twitch's data
+  // service; the token is the page's own and only goes to Twitch.
+  if (msg.type === "askWhispers") {
+    fetch("https://gql.twitch.tv/gql", {
+      method: "POST",
+      headers: { "Client-Id": "kimne78kx3ncx6brgo4mv6wki5h1ko", Authorization: `OAuth ${msg.token}` },
+      body: JSON.stringify({ query: msg.query }),
+    })
+      .then((r) => r.json())
+      .then(reply, (e) => reply({ error: String(e) }));
+    return true; // reply comes later
+  }
+
   if (msg.type === "askSenderDone" && sender.tab) {
     chrome.storage.local.remove("askSenderTab");
     chrome.windows.remove(sender.tab.windowId);

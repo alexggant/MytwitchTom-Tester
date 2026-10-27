@@ -28,8 +28,11 @@
 // window closes. If Twitch won't send it (say the other person blocks whispers
 // from strangers), you get a card saying why.
 //
-// Receiving: Twitch opens its whisper window when a whisper arrives; this reads
-// tagged lines from it.
+// Receiving: every 15 seconds this asks Twitch (with your own sign-in, through
+// background.js, the same request Twitch's page makes) for your recent whisper conversations and picks
+// out tagged messages from the last day. It only does this while someone is on
+// your list or you're waiting on an answer. Twitch's whisper window, when it's
+// open, is read too, so cards can show a little sooner.
 //
 // Saved in chrome.storage.local:
 //   "askTrusted" [logins]                                   who can ask you
@@ -505,6 +508,46 @@
 
   // ===== Incoming whispers =================================================================
 
+  const POLL_MS = 15 * 1000;
+  const handled = new Set(); // whisper message ids already looked at
+
+  const authToken = () => document.cookie.match(/(?:^|; )auth-token=([^;]+)/)?.[1] || "";
+
+  // Anything to listen for: someone allowed to ask you, or a question of yours
+  // still waiting for its answer.
+  const listening = () => trusted.length > 0 || Object.values(sent).some((q) => !q.answer && !q.failed);
+
+  // The asking goes through background.js: a page's own scripts can't send your
+  // sign-in to Twitch's data service, but the extension's background can. A
+  // short status is left on the page (data-tbc-ask-poll) for troubleshooting.
+  async function pollWhispers() {
+    const token = authToken();
+    const status = (text) => (document.documentElement.dataset.tbcAskPoll = `${new Date().toLocaleTimeString()} ${text}`);
+    if (!alive()) return;
+    if (!token) return status("signed out");
+    if (!listening()) return status("idle (nobody on your list, no questions waiting)");
+    const query = "{ currentUser { whisperThreads(first: 10) { edges { node { messages(first: 10) { edges { node { id sentAt content { content } from { login displayName } } } } } } } } }";
+    let j;
+    try {
+      j = await chrome.runtime.sendMessage({ type: "askWhispers", token, query });
+    } catch (e) {
+      return status(`couldn't ask Twitch: ${e.message}`);
+    }
+    if (!j?.data) return status(`Twitch said: ${j?.error || j?.errors?.[0]?.message || "nothing"}`);
+    let tagged = 0;
+    for (const thread of j.data?.currentUser?.whisperThreads?.edges || []) {
+      for (const { node: m } of thread.node?.messages?.edges || []) {
+        if (!m || handled.has(m.id)) continue;
+        handled.add(m.id);
+        const body = m.content?.content || "";
+        if (!body.includes("[MTT ") || Date.now() - Date.parse(m.sentAt) > DAY_MS) continue;
+        tagged++;
+        handleWhisper(body, (m.from?.login || "").toLowerCase(), m.from?.displayName);
+      }
+    }
+    status(`checked, ${tagged} new tagged`);
+  }
+
   // Twitch opens its whisper window when a whisper arrives. Each conversation
   // is labelled with the other person's username, and each line starts with
   // who wrote it; their tagged lines are handled once each.
@@ -532,13 +575,13 @@
     const [, kind, id, code] = m;
     const text = body.replace(TAG_RE, "").trim();
     if (kind === "?") {
-      if (!trusted.includes(from)) return; // not on your list: stays a normal whisper
+      if (!trusted.includes(from) || inbox[id]) return; // not on your list (stays a normal whisper), or already have it
       update("askInbox", (box) => {
         const open = Object.values(box).filter((q) => q.from === from && !q.done).length;
         if (box[id] || open >= MAX_OPEN_PER_PERSON) return; // already have it, or too many
         box[id] = { from, name: name || from, text: text.replace(/^❓\s*/, ""), at: Date.now() };
       });
-    } else if (ANSWERS[code]) {
+    } else if (ANSWERS[code] && sent[id] && !sent[id].answer) {
       update("askSent", (all) => {
         const q = all[id];
         if (!q || q.to !== from || q.answer) return; // only answers to your own questions
@@ -712,6 +755,8 @@
     chrome.storage.local.get(["askTrusted", "askInbox", "askSent", "follows"], (d) => {
       ready = true;
       load(d);
+      pollWhispers();
+      setInterval(pollWhispers, POLL_MS);
     });
   });
 
