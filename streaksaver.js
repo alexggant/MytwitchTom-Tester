@@ -1,7 +1,9 @@
 // Auto Streak Saver. When Twitch's left sidebar shows "Save your Streak" (a
 // channel whose watch streak is at risk, linking to one of its VODs), this opens
-// that VOD in a small separate window, sets the volume to 1%, plays it until
-// Twitch says the streak has been saved, plays 20 seconds more, and closes.
+// that VOD in a separate window, minimized and with its tab muted, sets the
+// player to 1% (so Twitch sees it playing with sound), plays it until Twitch
+// says the streak has been saved, plays 20 seconds more, and closes. Your
+// Twitch tab then shows a pop-up saying it's saved and on which channel.
 //
 // Three pills above the "Save your Streak" row pick how it behaves:
 //   Auto Saver    runs by itself whenever "Save your Streak" appears (and when clicked)
@@ -10,7 +12,7 @@
 //
 // It counts as saved when Twitch says so ("Your … streak … is saved!"). If that
 // hasn't happened by the usual time it takes plus 20 seconds, it gives up and
-// your Twitch tab shows a pop-up saying so.
+// your Twitch tab shows a pop-up saying so instead.
 //
 // background.js opens and closes the saver window (pages can't open windows
 // without a click) and tells this script, running inside it, that it's the one
@@ -21,9 +23,11 @@
 //   "streakSaverMode"   "auto" | "manual" | "off" (the pills)
 //   "streakSaverState"  { running: { channel, at } | null, done: { channel: timeMs } }
 //   "streakSaverFailed" { channel, at } while the gave-up pop-up is waiting to be seen
+//   "streakSaverSaved"  { channel, text, at } while the saved pop-up is waiting to be seen
 //
-// Wrapped so its names don't clash with the other scripts.
-(() => {
+// Wrapped so its names don't clash with the other scripts, and only started if
+// it's switched on (settings.js).
+whenOn("saver", "Streak Saver", () => {
   if (window.top !== window) return;
 
   const ROW = 'a[class*="saveYourStreakSideNavRow"]';
@@ -68,17 +72,7 @@
     getState((s) => {
       s.running = { channel: info.channel, at: Date.now() };
       setState(s);
-      // A small window in the bottom-right corner of the screen.
-      const width = 640;
-      const height = 400;
-      chrome.runtime.sendMessage({
-        type: "openStreakSaver",
-        url: info.url,
-        width,
-        height,
-        left: Math.max(0, screen.availWidth - width - 20),
-        top: Math.max(0, screen.availHeight - height - 40),
-      });
+      chrome.runtime.sendMessage({ type: "openStreakSaver", url: info.url }); // minimized and muted
     });
   }
 
@@ -102,7 +96,7 @@
   }
 
   const MODE_TIPS = {
-    auto: "When \"Save your Streak\" shows up, it's watched for you in a small window at 1% volume",
+    auto: "When \"Save your Streak\" shows up, it's watched for you in a hidden, muted window",
     manual: "Only runs when you click \"Save your Streak\"",
     off: "Does nothing; \"Save your Streak\" works like normal Twitch",
   };
@@ -164,31 +158,38 @@
       mode = changes.streakSaverMode.newValue || "auto";
       renderPill();
     }
-    if (changes.streakSaverFailed && !isSaver) {
-      if (changes.streakSaverFailed.newValue) showGaveUp(changes.streakSaverFailed.newValue);
-      else document.querySelector(".tbc-gaveup")?.remove(); // dismissed in another tab
+    for (const key of ["streakSaverFailed", "streakSaverSaved"]) {
+      if (!changes[key] || isSaver) continue;
+      if (changes[key].newValue) showResult(key, changes[key].newValue);
+      else document.querySelector(`.tbc-gaveup[data-key="${key}"]`)?.remove(); // dismissed in another tab
     }
   });
 
-  // The pop-up shown in your Twitch tabs when the saver gave up.
-  function showGaveUp(failed) {
-    if (document.querySelector(".tbc-gaveup")) return;
+  // The pop-up shown in your Twitch tabs when the saver is done: saved, or gave up.
+  function showResult(key, info) {
+    document.querySelector(".tbc-gaveup")?.remove(); // only the latest
+    const saved = key === "streakSaverSaved";
     const box = document.createElement("div");
     box.className = "tbc-gaveup";
+    box.dataset.key = key;
     box.setAttribute("role", "alertdialog");
     box.innerHTML =
       `<div class="tbc-gaveup__card">` +
       `<img class="tbc-gaveup__tom" alt="">` +
-      `<p class="tbc-gaveup__msg">Twitch be twitching. Tom did his best, but you can take it up with Bezos.</p>` +
+      `<p class="tbc-gaveup__msg"></p>` +
       `<p class="tbc-gaveup__sub"></p>` +
       `<button type="button" class="tbc-gaveup__ok">OK</button>` +
       `</div>`;
     box.querySelector(".tbc-gaveup__tom").src = chrome.runtime.getURL("icons/icon128.png");
-    box.querySelector(".tbc-gaveup__sub").textContent =
-      `Twitch never said your streak on ${failed.channel} was saved.`;
+    box.querySelector(".tbc-gaveup__msg").textContent = saved
+      ? `Streak saved with ${info.channel}`
+      : "Twitch be twitching. Tom did his best, but you can take it up with Bezos.";
+    box.querySelector(".tbc-gaveup__sub").textContent = saved
+      ? info.text || "Twitch says your watch streak is safe."
+      : `Twitch never said your streak on ${info.channel} was saved.`;
     box.querySelector(".tbc-gaveup__ok").addEventListener("click", () => {
       box.remove();
-      if (alive()) chrome.storage.local.remove("streakSaverFailed");
+      if (alive()) chrome.storage.local.remove(key);
     });
     document.body.append(box);
   }
@@ -209,16 +210,18 @@
   // e.g. "Your 2-stream streak with sheikahwolfy is saved!" (Twitch splits it into
   // several pieces, so check whole short elements, not single bits of text).
   // The "Save your Streak" row disappearing from the sidebar also counts.
+  // Returns Twitch's message when it shows one, "" when only the row went away,
+  // or null while not saved yet.
   let rowSeen = false;
   function savedShown() {
-    if (document.querySelector(ROW)) rowSeen = true;
-    else if (rowSeen) return true;
     for (const el of document.body.querySelectorAll("div, p, span")) {
       const t = el.textContent;
       if (t.length > 200 || !SAVED_RE.test(t) || el.closest(CHAT)) continue;
-      return true;
+      return t.replace(/\s+/g, " ").trim();
     }
-    return false;
+    if (document.querySelector(ROW)) rowSeen = true;
+    else if (rowSeen) return "";
+    return null;
   }
 
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -243,6 +246,7 @@
     const startedAt = Date.now();
     overlay("Auto Streak Saver: watching to save your streak…");
     let volumeSet = false;
+    let savedText = null;
     while (Date.now() - startedAt < GIVE_UP_MS) {
       if (!alive()) return;
       await keepPlaying();
@@ -251,11 +255,16 @@
         await setOnePercent(controls); // from content.js
         volumeSet = true;
       }
-      if (savedShown()) break;
+      savedText = savedShown();
+      if (savedText !== null) break;
       await wait(2000);
     }
-    const saved = Date.now() - startedAt < GIVE_UP_MS;
+    const saved = savedText !== null;
     if (saved) {
+      // Tell your Twitch tab straight away; the window keeps playing a little longer.
+      getState((s) => {
+        if (alive()) chrome.storage.local.set({ streakSaverSaved: { channel: s.running?.channel || "this channel", text: savedText, at: Date.now() } });
+      });
       // Keep watching a little longer, as asked, then close.
       for (let left = EXTRA_MS; left > 0; left -= 1000) {
         overlay(`Streak saved. Closing in ${Math.ceil(left / 1000)}s…`);
@@ -292,9 +301,11 @@
       }
       renderPill();
       maybeAutoSave();
-      // A gave-up pop-up nobody has dismissed yet (e.g. this tab was reloaded).
-      chrome.storage.local.get("streakSaverFailed", (d) => {
-        if (d.streakSaverFailed && Date.now() - d.streakSaverFailed.at < 60 * 60 * 1000) showGaveUp(d.streakSaverFailed);
+      // A pop-up nobody has dismissed yet (e.g. this tab was reloaded).
+      chrome.storage.local.get(["streakSaverFailed", "streakSaverSaved"], (d) => {
+        for (const key of ["streakSaverFailed", "streakSaverSaved"]) {
+          if (d[key] && Date.now() - d[key].at < 60 * 60 * 1000) showResult(key, d[key]);
+        }
       });
     });
   });
@@ -311,4 +322,4 @@
     }, 500);
   });
   observer.observe(document.documentElement, { childList: true, subtree: true });
-})();
+});

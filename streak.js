@@ -11,13 +11,18 @@
 // streak once a minute and notes how many minutes you'd watched when it went up.
 // Until it has seen that happen, it assumes DEFAULT_MINUTES.
 //
+// When the countdown runs out, and whenever Twitch's own watch streak popup is
+// on screen, the flame steps aside (and stops opening the rewards panel) so
+// Twitch's popup has room; then it comes back with the check mark.
+//
 // Wrapped so its names (render, peek, ...) don't clash with the other scripts.
-(() => {
+whenOn("streak", "Watch streak flame", () => {
   const DEFAULT_MINUTES = 10;
   const CHECK_EVERY_MS = 60 * 1000; // how often to re-read the streak while waiting for it to go up
   const STOP_CHECKING_MIN = 90;     // give up re-reading after this many minutes of a stream
   const SAME_STREAM_MS = 10 * 60 * 1000;
   const MAX_SAMPLES = 10;
+  const AWAY_MS = 20 * 1000;        // how long the flame hides when the countdown runs out
   const BALANCES = 'button[aria-label="Bits and Points Balances"]';
   const REWARDS = ".rewards-list";
   const PANEL = '[role="dialog"][aria-labelledby="channel-points-reward-center-header"]';
@@ -40,7 +45,6 @@
     if (alive()) chrome.storage.local.set(items);
   }
 
-  const notes = {};         // channel -> Twitch's extra streak line ("3 more streams until …")
   const streaks = {};       // channel -> number (or null if Twitch shows none), saved between visits
   const fresh = {};         // channel -> streak as read during this page visit
   const peeked = new Set(); // channels read this page load
@@ -50,6 +54,11 @@
   // The stream being watched, saved per channel:
   // { channel, start, seconds, streakAtStart, counted, countedAt }
   let watch = null;
+  let awayUntil = 0;        // the flame is hidden until then, for Twitch's popup
+  let twitchShowing = false; // Twitch's own watch streak popup is on screen
+  let recheck = false;      // re-read the streak as soon as Twitch's popup goes
+
+  const away = () => twitchShowing || Date.now() < awayUntil;
 
   function channelName() {
     const parts = location.pathname.split("/").filter(Boolean);
@@ -60,7 +69,6 @@
   chrome.storage.local.get(null, (data) => {
     for (const [k, v] of Object.entries(data)) {
       if (k.startsWith("streak:")) streaks[k.slice(7)] = v;
-      if (k.startsWith("streakNote:")) notes[k.slice(11)] = v;
     }
     samples = data.streakSamples || [];
     render();
@@ -79,32 +87,6 @@
   }
 
   // --- Reading the streak ------------------------------------------------------
-
-  // Twitch's extra line under the streak, e.g. "3 more streams until …".
-  function readStreakNote() {
-    const list = document.querySelector(REWARDS);
-    if (!list) return undefined;
-    for (const p of list.querySelectorAll("p")) {
-      if (!STREAK_RE.test(p.textContent)) continue;
-      // The extra line sits a few levels out from the streak text; walk outward
-      // until there's more text, but stop before reaching the rest of the list.
-      let box = p.parentElement;
-      for (let i = 0; i < 6 && box && box !== list; i++, box = box.parentElement) {
-        const rest = box.textContent.replace(p.textContent, "").replace(/\s+/g, " ").trim();
-        if (rest && rest.length < 120) return rest;
-        if (rest) break;
-      }
-      return "";
-    }
-    return undefined;
-  }
-
-  function storeNote(channel, note) {
-    if (note === undefined || notes[channel] === note) return;
-    notes[channel] = note;
-    if (alive()) chrome.storage.local.set({ ["streakNote:" + channel]: note });
-    render();
-  }
 
   function readStreak() {
     const list = document.querySelector(REWARDS);
@@ -147,6 +129,7 @@
 
   // Don't open anything while you're busy: typing in chat, or another panel open.
   function busy() {
+    if (away()) return true; // don't disturb Twitch's streak popup
     const active = document.activeElement;
     if (active && active.closest('[data-a-target="chat-input"], input, textarea, [contenteditable="true"]')) return true;
     // Twitch leaves the emote picker in the page after closing it, so ask its button.
@@ -233,8 +216,17 @@
       saveWatch();
     }
     // Until this stream counts, re-read the streak every minute to catch the moment it does.
+    // The countdown just ran out: step aside once for Twitch's popup.
+    if (!watch.counted && !watch.steppedAside && watch.seconds / 60 >= threshold()) {
+      watch.steppedAside = true;
+      saveWatch();
+      awayUntil = now + AWAY_MS;
+      recheck = true;
+    }
+    // Until this stream counts, re-read the streak every minute to catch the moment it does.
     if (!watch.counted && watch.seconds >= 60 && watch.seconds < STOP_CHECKING_MIN * 60 &&
-        now - lastCheck >= CHECK_EVERY_MS) {
+        (now - lastCheck >= CHECK_EVERY_MS || recheck) && !away()) {
+      recheck = false;
       peek();
     }
     render();
@@ -276,28 +268,22 @@
       : "a guess until it sees your streak go up";
     let left = "";
     let state = "";
-    const tip = [n == null ? "No watch streak found for this channel" : `Watch streak: ${n}`];
-    if (notes[channel]) tip.push(notes[channel]);
+    // The hover box: just the target and how much of this stream you've watched.
+    const tip = [`Target: ${target} min (${source})`];
     if (!watch || watch.channel !== channel) {
-      tip.push(uptimeShown()
-        ? "Minutes left will show once the stream is playing"
-        : "Minutes left shows on the channel's page while it's live and playing");
+      tip.push("Watched: – (shows while the stream is live and playing)");
     } else {
-      const watched = Math.floor(watch.seconds / 60);
-      tip.push(`You've watched ${plural(watched, "minute")} of this stream`);
+      tip.push(`Watched: ${Math.floor(watch.seconds / 60)} min`);
       if (watch.counted) {
         left = "✓";
         state = "done";
-        tip.push(`It counted toward your streak after about ${plural(watch.countedAt, "minute")}`);
       } else {
         const remaining = Math.ceil(target - watch.seconds / 60);
         if (remaining > 0) {
           left = `${remaining}m`;
-          tip.push(`About ${plural(remaining, "more minute")} to count it (target ${target} min, ${source})`);
         } else {
           left = "…";
           state = "waiting";
-          tip.push(`Past the ${target} min target; waiting for Twitch to update your streak`);
         }
       }
     }
@@ -307,6 +293,46 @@
     if (flame.hasAttribute("title")) flame.removeAttribute("title"); // the tooltip below replaces it
     if (tipEl) fillTip();
     flame.classList.toggle("tbc-streak--done", state === "done");
+    flame.classList.toggle("tbc-streak--away", away());
+    if (away() && tipEl) {
+      tipEl.remove();
+      tipEl = null;
+    }
+  }
+
+  // ===== Twitch's own streak popup =================================================
+
+  // Any visible "watch streak" text around the chat or player that isn't ours, the
+  // rewards panel, or a chat line. (The left sidebar's channel cards say "Watch
+  // Streak" too, so only these areas count.)
+  const POPUP_AREAS = ".chat-shell, .chat-room, .channel-root__right-column, .channel-root__player, .video-player";
+
+  function findTwitchPopup() {
+    if (document.documentElement.classList.contains("tbc-peek")) return false;
+    const found = document.evaluate(
+      "//*[not(self::script or self::style)]/text()[contains(translate(., 'STREAK', 'streak'), 'streak')]",
+      document.body, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+    for (let i = 0; i < found.snapshotLength; i++) {
+      const el = found.snapshotItem(i).parentElement;
+      if (!el || !/watch streak|stream streak|consecutive streams/i.test(el.textContent)) continue;
+      if (el.closest(`${PANEL}, ${REWARDS}, .tbc-streak, .tbc-streak-tip, .chat-scrollable-area__message-container, [data-a-target="chat-scroller"], .video-chat__message-list-wrapper, .tbc-saver`)) continue;
+      if (el.closest(POPUP_AREAS) && el.getBoundingClientRect().height > 0) return true;
+    }
+    return false;
+  }
+
+  let looking = 0;
+  function lookForTwitchPopup() {
+    if (looking) return;
+    looking = setTimeout(() => {
+      looking = 0;
+      const showing = findTwitchPopup();
+      if (showing === twitchShowing) return;
+      twitchShowing = showing;
+      // It just went away: read the streak now, so the check mark shows straight away.
+      if (!showing) recheck = true;
+      render();
+    }, 250);
   }
 
   // ===== Hover tooltip ============================================================
@@ -314,8 +340,6 @@
 
   let tipLines = [];
   let tipEl = null;
-
-  const uptimeShown = () => !!document.querySelector(".live-time");
 
   function fillTip() {
     const html = tipLines.map((l, i) => `<div class="${i ? "" : "tbc-streak-tip__head"}"></div>`).join("");
@@ -370,8 +394,8 @@
     if (document.querySelector(PANEL)) {
       const n = readStreak();
       if (n !== undefined && n !== streaks[channel]) storeStreak(channel, n);
-      storeNote(channel, readStreakNote());
     }
+    lookForTwitchPopup();
     if (!document.querySelector(".tbc-streak")) render();
     if (!peeked.has(channel) && document.querySelector(BALANCES)) peek();
   });
@@ -396,4 +420,4 @@
       if (line) return line.scrollIntoView({ block: "nearest" });
     }
   }, true);
-})();
+});

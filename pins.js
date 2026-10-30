@@ -1,5 +1,7 @@
 // Adds a "Pinned" row to Twitch's emote picker, above Frequently Used.
 // Right-click any emote in the picker to pin it; right-click a pinned one to unpin.
+// Only started if switched on (settings.js); shares its switch with freqchannels.js.
+whenOn("emotes", "Pinned emotes and Frequent Channels", () => {
 const PICKER = '[data-a-target="chat-emote-picker"]';
 const EMOTE = '[data-test-selector="emote-button-clickable"]';
 const BLOCK = ".emote-picker__content-block";
@@ -43,7 +45,7 @@ function alive() {
 function save() {
   if (!alive()) return;
   chrome.storage.sync.set({ [STORE_KEY]: pins }, () => {
-    if (chrome.runtime.lastError) console.warn("MytwitchTom: couldn't save pinned emotes:", chrome.runtime.lastError.message);
+    if (chrome.runtime.lastError) console.warn("Twitch Space: couldn't save pinned emotes:", chrome.runtime.lastError.message);
   });
 }
 
@@ -227,4 +229,5 @@ document.addEventListener("dragend", () => {
   dragging = null;
   clearMarks();
   document.querySelectorAll(".tbc-dragging").forEach((el) => el.classList.remove("tbc-dragging"));
+});
 });

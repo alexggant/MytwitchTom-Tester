@@ -287,3 +287,33 @@ document.addEventListener("mouseover", (e) => {
   const volume = mute && [...group.children].find((c) => c.contains(mute));
   if ((volume && volume.contains(e.target)) || b.contains(e.target)) showOnePercent(b);
 }, true);
+
+// ===== Quiet channel home =====================================================
+// An offline channel's Home page autoplays a recent stream in the carousel at the
+// top, with sound. Twitch keeps a separate mute setting just for that carousel
+// (localStorage "video-muted": { default, carousel }), so keep that one on; live
+// streams use "default" and aren't touched. If the carousel still starts with
+// sound (the setting was read before this ran), mute it once per page visit;
+// unmuting it yourself sticks for that visit.
+
+function muteCarouselByDefault() {
+  try {
+    const prefs = JSON.parse(localStorage.getItem("video-muted") || "{}");
+    if (prefs.carousel === true) return;
+    prefs.carousel = true;
+    localStorage.setItem("video-muted", JSON.stringify(prefs));
+  } catch {
+    // Storage blocked or unreadable: the play check below still mutes it.
+  }
+}
+muteCarouselByDefault();
+
+let quietedPage = null;
+document.addEventListener("play", (e) => {
+  const video = e.target;
+  if (!(video instanceof HTMLVideoElement) || !video.closest(".persistent-player")) return;
+  if (!document.querySelector('[data-a-target="home-offline-carousel"]')) return; // live, or not a channel home
+  if (quietedPage === location.pathname) return;
+  quietedPage = location.pathname;
+  video.muted = true;
+}, true);

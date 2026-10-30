@@ -24,8 +24,9 @@
 //   "marks:<vodId>"            { marks: [{ id, t, note }], removed: [ids] }
 //   "live:<channel>:<startMs>" { channel, start, marks: [{ id, t, note }] }
 //
-// Wrapped so its names don't clash with the other scripts.
-(() => {
+// Wrapped so its names don't clash with the other scripts, and only started if
+// it's switched on (settings.js).
+whenOn("vodmarks", "Bookmarks and VOD markers", () => {
   const SEEKBAR = '[data-a-target="player-seekbar"]';
   const BAR = ".seekbar-bar";      // the visible timeline inside the seek bar
   const RIGHT_CONTROLS = ".player-controls__right-control-group";
@@ -755,4 +756,4 @@
   // The duration arrives after the page loads; redraw when it does.
   document.addEventListener("durationchange", () => render(), true);
   document.addEventListener("loadedmetadata", () => render(), true);
-})();
+});

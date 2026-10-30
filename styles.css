@@ -1544,6 +1544,27 @@ html.tbc-peek [role="dialog"][aria-labelledby="channel-points-reward-center-head
 .tbc-askhdr:hover {
   background: rgba(83, 83, 95, 0.55);
 }
+/* Not connected with this channel yet: the button only offers to connect. */
+.tbc-askhdr--off {
+  opacity: 0.55;
+}
+.tbc-askhdr--off:hover {
+  opacity: 1;
+}
+.tbc-askpanel__link {
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #adadb8;
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.tbc-askpanel__link:hover {
+  color: #efeff1;
+}
 
 /* Shared bits: the panel's and cards' fonts, inputs, purple buttons and ×. */
 .tbc-askpanel,
@@ -1708,8 +1729,7 @@ html.tbc-peek [role="dialog"][aria-labelledby="channel-points-reward-center-head
 }
 
 /* Where the cards go: at the top of chat, under Twitch's pinned messages (it
-   hangs from their floating stack while that's showing), or floating near the
-   top of the window on a page with no chat. */
+   hangs from their floating stack while that's showing). */
 .tbc-chatpins {
   flex: none;
   max-height: 45vh;
@@ -1720,17 +1740,6 @@ html.tbc-peek [role="dialog"][aria-labelledby="channel-points-reward-center-head
 }
 .tbc-chatpins > * {
   margin: 4px 10px 6px;
-}
-.tbc-floatcards {
-  position: fixed;
-  top: 64px;
-  left: 50%;
-  z-index: 10001;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  width: min(440px, calc(100vw - 32px));
-  transform: translateX(-50%);
 }
 
 /* The answer icons, in their colours (on the buttons and on the asker's card). */
@@ -1856,4 +1865,56 @@ html.tbc-peek [role="dialog"][aria-labelledby="channel-points-reward-center-head
   color: #adadb8;
   font-size: 12px;
   overflow-wrap: anywhere;
+}
+
+/* Channel column down the right of the emote picker (freqchannels.js), in
+   place of the one Twitch's newer picker dropped. */
+.tbc-chnav-host {
+  position: relative;
+}
+.tbc-chnav-host > .scrollable-area {
+  margin-right: 44px;
+}
+.tbc-chnav {
+  position: absolute;
+  right: 0;
+  width: 44px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 0;
+  box-sizing: border-box;
+  border-left: 1px solid var(--color-border-base, rgba(83, 83, 95, 0.48));
+}
+.tbc-chnav__item {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  padding: 2px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tbc-chnav__item:hover {
+  background: var(--color-background-interactable-hover, rgba(83, 83, 95, 0.48));
+}
+.tbc-chnav__item--on {
+  box-shadow: 0 0 0 2px #a970ff;
+}
+.tbc-chnav__item img {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: block;
+}
+
+/* The streak flame steps aside while Twitch's own streak popup shows (streak.js). */
+.tbc-streak.tbc-streak--away {
+  display: none;
 }

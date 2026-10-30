@@ -15,8 +15,9 @@
 //   "followsByAccount"  { login: { updated, list } }               (each account's own)
 //   "person:<login>"  { known: [{ login, name, img }], pronouns, note }
 //
-// Wrapped so its names don't clash with the other scripts.
-(() => {
+// Wrapped so its names don't clash with the other scripts, and only started if
+// it's switched on (settings.js).
+whenOn("people", "Chatter notes (right-click a name)", () => {
   const USERNAME = '[data-a-target="chat-message-username"]';
   const FOLLOWING_PATH = "/directory/following/channels";
   const SYNC_HASH = "#tbc-sync";
@@ -485,4 +486,4 @@
   window.addEventListener("pointerdown", (e) => {
     if (flyout && !flyout.el.contains(e.target)) closeFlyout();
   }, true);
-})();
+});

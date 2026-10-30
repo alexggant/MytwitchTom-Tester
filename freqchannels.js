@@ -3,6 +3,11 @@
 // the channels whose emotes show up most in your Frequently Used list, most-used
 // first. Click (or right-click) a channel to jump to its emotes.
 //
+// Twitch's newer picker dropped the column of channel pictures down its right
+// side (it only has a few tabs along the bottom now), so this puts that column
+// back: every channel you have emotes from, in the picker's order; click one to
+// jump to its emotes.
+//
 // You can arrange it: drag channels to reorder, hover one and click × to remove
 // it, and right-click any channel picture in the picker's right-hand sidebar to
 // add it (right-click again there to take it back out). Once you've arranged
@@ -19,14 +24,19 @@
 //   "emoteChannels" { channelName: imageUrl }
 //   "freqChannelLayout" { order: [channelName], hidden: [channelName] }
 //
-// Wrapped so its names don't clash with the other scripts.
-(() => {
+// Wrapped so its names don't clash with the other scripts, and only started if
+// it's switched on (settings.js).
+whenOn("emotes", "Pinned emotes and Frequent Channels", () => {
   const PICKER = '[data-a-target="chat-emote-picker"]';
   const EMOTE = '[data-test-selector="emote-button-clickable"]';
   const BLOCK = ".emote-picker__content-block";
   const TITLE = ".emote-grid-section__header-title";
-  // The channel buttons down the picker's right-hand side.
-  const NAV = `${PICKER} [data-a-target^="category-ref-"], ${PICKER} [data-a-target="CHANNEL_EMOTES"]`;
+  // Twitch's old channel buttons down the picker's right-hand side, and the column
+  // this script adds in their place.
+  const TWITCH_NAV = `${PICKER} [data-a-target^="category-ref-"]`;
+  const NAV = `${TWITCH_NAV}, ${PICKER} [data-a-target="CHANNEL_EMOTES"], ${PICKER} .tbc-chnav__item`;
+  // Every channel's section is tagged with its name, even before Twitch fills it in.
+  const REF = `${BLOCK}[data-ref-target^="category-ref-"]`;
   const MAX_CHANNELS = 12;
   // Picker sections that aren't a streamer's emotes.
   const NOT_CHANNELS = /^(frequently used|unlocked|twitch|global|hype train|twitchhypetrain)$/i;
@@ -185,25 +195,118 @@
     return { list, unknown };
   }
 
-  // Twitch only fills in a section's title once it's scrolled near, so click the
-  // channel's own button in the picker's right-hand sidebar, which always exists
-  // and scrolls straight to it. Fall back to scrolling to a loaded section.
+  // "category-ref-TallGlassOfBees" -> "TallGlassOfBees".
+  function refName(block) {
+    return (block.dataset.refTarget || "").replace(/^category-ref-/, "");
+  }
+
+  // Twitch only fills in a section's title once it's scrolled near, but its tag
+  // is there from the start, so find the section by that and scroll to it.
   function jumpTo(picker, name) {
     if (!picker) return;
-    const navs = [...picker.querySelectorAll(NAV)];
-    const nav =
-      navs.find((n) => navLabel(n).toLowerCase() === name.toLowerCase()) ||
-      (channels[name] && navs.find((n) => n.querySelector("img")?.src === channels[name]));
-    if (nav) return nav.click();
-    const block = [...picker.querySelectorAll(BLOCK)].find((b) => titleOf(b) === name);
+    const lower = name.toLowerCase();
+    const blocks = [...picker.querySelectorAll(BLOCK)];
+    const block =
+      blocks.find((b) => refName(b).toLowerCase() === lower || titleOf(b).toLowerCase() === lower) ||
+      (channels[name] && blocks.find((b) => b.querySelector(`${TITLE} img`)?.src === channels[name]));
     const list = block && block.closest(".scrollable-area");
     if (!list) return;
     list.scrollTop += block.getBoundingClientRect().top - list.getBoundingClientRect().top;
   }
 
+  // A channel's picture: from its section once loaded, otherwise the one saved earlier.
+  function pictureOf(block, name) {
+    const img = block.querySelector(`${TITLE} img`);
+    if (img) return img.src;
+    const lower = name.toLowerCase();
+    const key = Object.keys(channels).find((n) => n.toLowerCase() === lower);
+    return key ? channels[key] : "";
+  }
+
+  // --- The channel column down the right-hand side ---------------------------------
+  const watched = new WeakSet(); // lists whose scrolling already moves the highlight
+
+  function renderNav(picker) {
+    const first = picker.querySelector(BLOCK);
+    const list = first && first.closest(".scrollable-area");
+    const host = list && list.parentElement;
+    if (!host) return;
+    let nav = host.querySelector(":scope > .tbc-chnav");
+    const blocks = [...picker.querySelectorAll(REF)].filter((b) => !NOT_CHANNELS.test(refName(b)));
+    // Twitch's own column is back, or there are no channels to list.
+    if (picker.querySelector(TWITCH_NAV) || !blocks.length) {
+      if (nav) nav.remove();
+      host.classList.remove("tbc-chnav-host");
+      return;
+    }
+    host.classList.add("tbc-chnav-host");
+    if (!nav) {
+      nav = document.createElement("div");
+      nav.className = "tbc-chnav";
+      host.append(nav);
+    }
+    // Same height as the emote list (Twitch's tabs sit below it).
+    const top = list.offsetTop + "px";
+    const height = list.offsetHeight + "px";
+    if (nav.style.top !== top) nav.style.top = top;
+    if (nav.style.height !== height) nav.style.height = height;
+
+    const items = blocks.map((b) => [refName(b), pictureOf(b, refName(b))]);
+    const key = items.flat().join("|");
+    if (nav.dataset.key !== key) {
+      nav.dataset.key = key;
+      nav.textContent = "";
+      for (const [name, src] of items) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "tbc-chnav__item";
+        b.dataset.tbcNav = name;
+        b.setAttribute("aria-label", `${name}'s Emotes`);
+        b.title = `${name}: click to jump to their emotes, right-click to add to Frequent Channels`;
+        if (src) {
+          const img = document.createElement("img");
+          img.alt = "";
+          img.src = src;
+          b.append(img);
+        } else {
+          b.textContent = name[0].toUpperCase();
+        }
+        nav.append(b);
+      }
+    }
+    if (!watched.has(list)) {
+      watched.add(list);
+      list.addEventListener("scroll", () => highlight(picker), { passive: true });
+    }
+    highlight(picker);
+  }
+
+  // Light up the channel whose emotes are at the top of the list.
+  function highlight(picker) {
+    const nav = picker.querySelector(".tbc-chnav");
+    const list = nav && picker.querySelector(BLOCK)?.closest(".scrollable-area");
+    if (!list) return;
+    const top = list.getBoundingClientRect().top + 10;
+    let current = null;
+    for (const b of picker.querySelectorAll(REF)) {
+      if (b.getBoundingClientRect().top > top) break;
+      current = refName(b);
+    }
+    for (const item of nav.children) {
+      const on = item.dataset.tbcNav === current;
+      if (item.classList.contains("tbc-chnav__item--on") === on) continue;
+      item.classList.toggle("tbc-chnav__item--on", on);
+      // Keep the lit one in view without scrolling the page.
+      if (on && (item.offsetTop < nav.scrollTop || item.offsetTop + item.offsetHeight > nav.scrollTop + nav.clientHeight)) {
+        nav.scrollTop = item.offsetTop - nav.clientHeight / 2;
+      }
+    }
+  }
+
   function render() {
     const picker = document.querySelector(PICKER);
     if (!picker) return;
+    renderNav(picker);
     const freq = frequentBlock(picker);
     if (!freq) return;
     learn(picker);
@@ -259,6 +362,15 @@
       jumpTo(b.closest(PICKER), b.dataset.tbcChannel);
     }, true);
   }
+
+  // Click a channel in the right-hand column to jump to its emotes.
+  document.addEventListener("click", (e) => {
+    const item = e.target.closest?.(".tbc-chnav__item");
+    if (!item) return;
+    e.preventDefault();
+    e.stopPropagation();
+    jumpTo(item.closest(PICKER), item.dataset.tbcNav);
+  }, true);
 
   // Right-click a channel in the picker's sidebar to add it to the row.
   document.addEventListener("contextmenu", (e) => {
@@ -355,4 +467,4 @@
     }, 150);
   });
   observer.observe(document.documentElement, { childList: true, subtree: true });
-})();
+});

@@ -10,8 +10,9 @@
 // the left stream, both, or only the right. "×" on a side closes it: close the new one to go back to normal, or the
 // original one to switch over to the new channel.
 //
-// Wrapped so its names don't clash with the other scripts.
-(() => {
+// Wrapped so its names don't clash with the other scripts, and only started if
+// it's switched on (settings.js).
+whenOn("split", "Split screen", () => {
   if (window.top !== window) return;
 
   const TOOLTIP = '[class*="online-side-nav-channel-tooltip"]';
@@ -204,4 +205,4 @@
     }, 150);
   });
   observer.observe(document.documentElement, { childList: true, subtree: true });
-})();
+});

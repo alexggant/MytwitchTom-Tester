@@ -21,8 +21,9 @@
 //   "highlightWords" [words]
 //   "emoteImages"  { emoteName: pictureUrl }
 //
-// Wrapped so its names don't clash with the other scripts.
-(() => {
+// Wrapped so its names don't clash with the other scripts, and only started if
+// it's switched on (settings.js).
+whenOn("phrases", "Quick phrases and highlight words", () => {
   const EMOTE_BUTTON = '[data-a-target="emote-picker-button"]';
   const CHAT_INPUT = '[data-a-target="chat-input"]';
   const PICKER = '[data-a-target="chat-emote-picker"]';
@@ -388,4 +389,4 @@
   });
   observer.observe(document.documentElement, { childList: true, subtree: true });
   addButton();
-})();
+});

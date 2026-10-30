@@ -1,0 +1,106 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body {
+    width: 290px;
+    margin: 0;
+    padding: 12px 0 10px;
+    background: #18181b;
+    color: #efeff1;
+    font: 13px/1.4 Inter, Roobert, "Helvetica Neue", Arial, sans-serif;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 14px 8px;
+  }
+  header img {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+  }
+  h1 {
+    margin: 0;
+    font-size: 15px;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 14px;
+    cursor: pointer;
+  }
+  .row:hover {
+    background: rgba(83, 83, 95, 0.3);
+  }
+  input {
+    appearance: none;
+    flex: none;
+    position: relative;
+    width: 32px;
+    height: 18px;
+    margin: 0;
+    border-radius: 9px;
+    background: #53535f;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  input::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform 0.15s;
+  }
+  input:checked {
+    background: #9147ff;
+  }
+  input:checked::after {
+    transform: translateX(14px);
+  }
+  .empty {
+    margin: 0;
+    padding: 4px 14px;
+    color: #adadb8;
+  }
+  footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 6px;
+    padding: 8px 14px 0;
+    border-top: 1px solid rgba(83, 83, 95, 0.48);
+    color: #adadb8;
+    font-size: 12px;
+  }
+  footer button {
+    padding: 4px 12px;
+    border: 0;
+    border-radius: 4px;
+    background: #9147ff;
+    color: #fff;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  footer button:hover {
+    background: #772ce8;
+  }
+</style>
+</head>
+<body>
+  <header><img src="icons/icon48.png" alt=""><h1>Twitch Space</h1></header>
+  <div id="list"></div>
+  <footer><span id="note">Changes apply when you refresh Twitch.</span></footer>
+  <script src="switches.js"></script>
+</body>
+</html>

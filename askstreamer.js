@@ -1,23 +1,33 @@
 // Ask the Streamer: a private quick question from a trusted viewer (a mod, a
-// regular) to the streamer, who answers with one click. Both need MytwitchTom.
+// regular) to the streamer, who answers with one click. Both need Twitch Space (or MytwitchTom,
+// its old name: the [MTT] tag below is kept so old and new copies still talk).
 //
-// Asking: on someone else's channel, the "Ask" button in the channel header
-// (just left of Pin) opens a box: type a question and Send. It goes to the
+// Connections: it only works between two people who have added each other.
+// Your list ("Ask connections") is both who you can ask and who can ask you.
+// On a channel that isn't on it, the Ask button only offers to add them; on
+// yours, the Questions button shows the whole list. A question from someone
+// you haven't added never pops up, and you can't send one to someone you
+// haven't added, so two strangers with the extension can't reach each other.
+//
+// Asking: on a channel you've connected with, the "Ask" button in the channel
+// header (just left of Pin) opens a box: type a question and Send. It goes to the
 // streamer as a Twitch whisper, so only the two of you see it. The whisper reads
 // fine on its own too ("❓ Can I clip that? [MTT ?k3j9x2]"), so a streamer
-// without MytwitchTom just gets a plain whisper.
+// without Twitch Space just gets a plain whisper.
 //
 // Answering: on your own channel the same button says "Questions" and opens
 // your allow list ("Who can ask you", searchable by people in chat, channels
 // you follow and Twitch's user search). A question from someone on it shows as
 // an outlined card at the top of your chat, just under Twitch's pinned
-// messages (floating near the top on a page with no chat). It has six answers,
+// messages. Cards and the Ask / Questions button only show where the chat is
+// on screen (the stream and chat views, not a channel's Home tab); a question
+// waits until you're somewhere with chat. It has six answers,
 // each with its icon (Yes, No, Maybe, Soon, OK, Thank you), a box to type your
 // own reply, and Dismiss. The answer goes back as a whisper and shows for the
 // asker as a card with the same icon.
 //
 // Safety: nobody can put a card on your screen until you add them to your
-// list; who sent a whisper comes from Twitch's whisper window, which is
+// list (and they have to add you to ask); who sent a whisper comes from Twitch's whisper window, which is
 // labelled with the other person's username, not from the message text; and at
 // most 3 unanswered questions per person show at once. Anything else stays a
 // normal whisper.
@@ -35,19 +45,21 @@
 // open, is read too, so cards can show a little sooner.
 //
 // Saved in chrome.storage.local:
-//   "askTrusted" [logins]                                   who can ask you
+//   "askTrusted" [logins]                                   your connections
 //   "askInbox"   { id: { from, name, text, at, done, error } } questions to you
 //                (kept a week once answered, so an old whisper window can't
 //                bring them back)
 //   "askSent"    { id: { to, text, at, answer, failed, ... } } questions you asked
 //   "askOutbox"  [{ to, text, ref, incognito }]             whispers waiting to go
 //
-// Wrapped so its names don't clash with the other scripts.
-(() => {
+// Wrapped so its names don't clash with the other scripts, and only started if
+// it's switched on (settings.js).
+whenOn("ask", "Ask the Streamer", () => {
   if (window.top !== window) return;
 
   const FOLLOW_BTN = '[data-a-target="follow-button"], [data-a-target="unfollow-button"]';
-  const CUSTOMIZE = 'main a[href*="/settings/channel"]'; // "Customize channel", on your own channel
+  const EDIT_INFO = '[data-a-target="channel-info-bar-edit-button"]'; // the pencil in your own channel's header
+  const CUSTOMIZE = 'main a[href*="/settings/channel"]'; // "Customize channel", on your own channel's Home
   const CHAT_ROOM = ".chat-room__content"; // the chat column: pinned messages, then the chat list
   const CHAT_LIST = ':scope > [class*="chat-list--"]';
   const MAX_LEN = 200;
@@ -58,7 +70,7 @@
   const svg = (paths, size = 18) => `<svg viewBox="0 0 20 20" width="${size}" height="${size}" aria-hidden="true">${paths}</svg>`;
   const LINE = 'fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"';
   // Each answer: its label, an emoji for the whisper text (so it reads fine
-  // without MytwitchTom), and the icon shown on the cards.
+  // without Twitch Space), and the icon shown on the cards.
   const ANSWERS = {
     y: { label: "Yes", emoji: "✅", icon: `<path d="M4 10.5l4 4 8-9" ${LINE} stroke-width="2.4"/>` },
     n: { label: "No", emoji: "❌", icon: `<path d="M5 5l10 10M15 5L5 15" ${LINE} stroke-width="2.4"/>` },
@@ -270,12 +282,16 @@
     const own = !!channel && channel === me;
     // Just before our Pin button (Pin keeps itself right before Follow, so this
     // way they don't keep swapping), or before Follow; on your own channel,
-    // before the "Customize channel" beside your name (Twitch's "Customize your
-    // channel" notice at the top has a link too, so take the last one).
+    // before the Edit pencil in the header (the stream and chat views), or else
+    // before the "Customize channel" beside your name (Home; Twitch's notices
+    // have such links too, so take the last one).
     const pin = !own && document.querySelector(".tbc-pinbtn");
-    const anchor = own ? [...document.querySelectorAll(CUSTOMIZE)].pop() : document.querySelector(FOLLOW_BTN);
+    const anchor = own
+      ? document.querySelector(EDIT_INFO) || [...document.querySelectorAll(CUSTOMIZE)].pop()
+      : document.querySelector(FOLLOW_BTN);
     let btn = document.querySelector(".tbc-askhdr");
-    if (isSender || !channel || !me || (!pin && !anchor)) {
+    // Only in the stream and chat views, where the chat is on screen.
+    if (isSender || !channel || !me || (!pin && !anchor) || !visibleRoom()) {
       btn?.remove();
       return;
     }
@@ -294,12 +310,17 @@
       const slot = slotOf(anchor);
       if (btn.nextElementSibling !== slot) slot.before(btn);
     }
-    const mode = own ? "own" : "ask";
+    const mode = own ? "own" : trusted.includes(channel) ? "ask" : "connect";
     if (btn.dataset.mode === mode && btn.dataset.channel === channel) return;
     btn.dataset.mode = mode;
     btn.dataset.channel = channel;
     btn.innerHTML = `${ASK_ICON}<span>${own ? "Questions" : "Ask"}</span>`;
-    btn.title = own ? "Who can send you Ask the Streamer questions" : `Ask ${channel} a private question (they answer with one click)`;
+    btn.classList.toggle("tbc-askhdr--off", mode === "connect");
+    btn.title = own
+      ? "Your Ask the Streamer connections"
+      : mode === "ask"
+        ? `Ask ${channel} a private question (they answer with one click)`
+        : `You're not connected with ${channel} for Ask the Streamer`;
     closePanel();
   }
 
@@ -315,6 +336,7 @@
     document.body.append(box);
     panel = { el: box, button };
     if (button.dataset.mode === "own") fillAllowList();
+    else if (button.dataset.mode === "connect") fillConnect(button.dataset.channel);
     else fillAsk(button.dataset.channel);
     placePanel();
   }
@@ -340,16 +362,22 @@
     const box = panel.el;
     box.innerHTML =
       `<div class="tbc-askpanel__head">Ask <b></b> privately</div>` +
-      `<p class="tbc-askpanel__sub">Sent as a whisper, so only you two see it. They tap an answer or type a reply. Works if they've added you to their list.</p>` +
+      `<p class="tbc-askpanel__sub">Sent as a whisper, so only you two see it. They tap an answer or type a reply. Only shows for them if they've added you too.</p>` +
       `<form class="tbc-askpanel__form"><input type="text" maxlength="${MAX_LEN}" placeholder="Your question" autocomplete="off">` +
       `<button type="submit">Send</button></form>` +
-      `<p class="tbc-askpanel__note"></p>`;
+      `<p class="tbc-askpanel__note"></p>` +
+      `<button type="button" class="tbc-askpanel__link">Remove from your connections</button>`;
     box.querySelector("b").textContent = channel;
+    box.querySelector(".tbc-askpanel__link").addEventListener("click", () => {
+      setTrusted(trusted.filter((l) => l !== channel));
+      closePanel();
+      addHeaderButton();
+    });
     const input = box.querySelector("input");
     box.querySelector("form").addEventListener("submit", async (e) => {
       e.preventDefault();
       const text = cleanText(input.value);
-      if (!text) return;
+      if (!text || !trusted.includes(channel)) return; // only to your connections
       const id = newId();
       input.value = "";
       box.querySelector(".tbc-askpanel__note").textContent = "Sent. A small window opens for a moment to send it.";
@@ -360,7 +388,23 @@
     input.focus();
   }
 
-  // ----- Your allow list ("Who can ask you"), searchable -------------------------------------
+  // A channel you're not connected with: offer to add them.
+  function fillConnect(channel) {
+    const box = panel.el;
+    box.innerHTML =
+      `<div class="tbc-askpanel__head">Connect with <b></b>?</div>` +
+      `<p class="tbc-askpanel__sub">Ask the Streamer only works between people who have added each other. Add them here, and they add you (from Questions on their own channel). Then you can ask each other private questions.</p>` +
+      `<form class="tbc-askpanel__form"><button type="submit">Add to your connections</button></form>`;
+    box.querySelector("b").textContent = channel;
+    box.querySelector("form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      if (!trusted.includes(channel)) setTrusted([...trusted, channel]);
+      addHeaderButton(); // now "Ask", and closes this
+      openPanel(document.querySelector(".tbc-askhdr"));
+    });
+  }
+
+  // ----- Your connections, searchable ---------------------------------------------------------
 
   const pics = {}; // login -> picture url
   const picsAsked = new Set();
@@ -430,19 +474,19 @@
   function fillAllowList() {
     const box = panel.el;
     box.innerHTML =
-      `<div class="tbc-askpanel__head">Who can ask you</div>` +
-      `<p class="tbc-askpanel__sub">Only these people can pop an Ask the Streamer question onto your screen. Anyone else's stays a normal whisper.</p>` +
+      `<div class="tbc-askpanel__head">Ask connections</div>` +
+      `<p class="tbc-askpanel__sub">People you can ask, and who can ask you. It only works once you've both added each other; anyone else's question stays a normal whisper.</p>` +
       `<div class="tbc-allow"></div>` +
-      `<input type="text" class="tbc-usearch__input" placeholder="Search people to allow" autocomplete="off" spellcheck="false">` +
+      `<input type="text" class="tbc-usearch__input" placeholder="Search people to connect with" autocomplete="off" spellcheck="false">` +
       `<div class="tbc-usearch"></div>`;
     const list = box.querySelector(".tbc-allow");
-    if (!trusted.length) list.append(el("p", "tbc-askpanel__sub", "Nobody yet. Search below to add your mods or regulars."));
+    if (!trusted.length) list.append(el("p", "tbc-askpanel__sub", "Nobody yet. Search below to add your mods, regulars or streamers you ask."));
     for (const login of trusted) {
       const row = el("div", "tbc-allow__row");
       row.dataset.login = login;
       const x = el("button", "tbc-x", "×");
       x.type = "button";
-      x.title = `${login} can't ask you any more`;
+      x.title = `Disconnect from ${login}`;
       x.addEventListener("click", () => {
         setTrusted(trusted.filter((l) => l !== login));
         fillAllowList();
@@ -498,7 +542,7 @@
       const item = el("button", "tbc-usearch__item");
       item.type = "button";
       item.dataset.login = u.login;
-      item.title = `Allow ${u.name || u.login} to ask you questions`;
+      item.title = `Connect with ${u.name || u.login}`;
       item.append(avatar(u.login), el("span", "tbc-usearch__name", u.name || u.login), el("span", "tbc-usearch__from", u.from));
       item.addEventListener("click", () => pick(u.login));
       results.append(item);
@@ -597,8 +641,17 @@
   // messages, drops and hype trains float in a stack over the top of the chat
   // list; while it's showing, the box hangs from its bottom so nothing covers
   // it, otherwise it sits just above the chat list.
-  function chatPins() {
+  // The chat column, only if it's actually on screen: on an offline channel's
+  // Home tab Twitch keeps it in the page but pushes it off the right edge.
+  function visibleRoom() {
     const room = document.querySelector(CHAT_ROOM);
+    if (!room?.querySelector(CHAT_LIST)) return null;
+    const r = room.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 && r.left < innerWidth - 40 && r.right > 40 ? room : null;
+  }
+
+  function chatPins() {
+    const room = visibleRoom();
     const list = room?.querySelector(CHAT_LIST);
     if (!list) return null;
     let box = room.querySelector(".tbc-chatpins");
@@ -613,32 +666,24 @@
     return box;
   }
 
-  // Show exactly the cards that should be showing (cards with no chat on the
-  // page float near the top; they move into the chat once there is one).
+  // Show exactly the cards that should be showing, at the top of the chat. With
+  // no chat on screen they're put away until there is one (they stay saved).
   function showCards(attr, ids, build) {
+    const pins = ids.length ? chatPins() : null; // (also keeps it in place if Twitch redraws)
     for (const card of document.querySelectorAll(`[data-${attr}]`)) {
-      if (!ids.includes(card.dataset[attr])) card.remove();
+      if (!pins || !ids.includes(card.dataset[attr]) || !pins.contains(card)) card.remove();
     }
-    const room = document.querySelector(CHAT_ROOM)?.querySelector(CHAT_LIST) ? document.querySelector(CHAT_ROOM) : null;
-    for (const id of ids) {
-      const card = document.querySelector(`[data-${attr}="${id}"]`);
-      if (card && (room ? room.contains(card) : card.parentElement?.classList.contains("tbc-floatcards"))) continue;
-      card?.remove();
-      const fresh = build(id);
-      fresh.dataset[attr] = id;
-      const pins = chatPins();
-      if (pins) {
+    if (pins) {
+      for (const id of ids) {
+        if (pins.querySelector(`[data-${attr}="${id}"]`)) continue;
+        const fresh = build(id);
+        fresh.dataset[attr] = id;
         pins.append(fresh);
-      } else {
-        let float = document.querySelector(".tbc-floatcards");
-        if (!float) document.body.append((float = el("div", "tbc-floatcards")));
-        float.append(fresh);
       }
     }
-    for (const box of document.querySelectorAll(".tbc-chatpins, .tbc-floatcards")) {
+    for (const box of document.querySelectorAll(".tbc-chatpins")) {
       if (!box.children.length) box.remove();
     }
-    if (document.querySelector(".tbc-chatpins")) chatPins(); // stay in place if Twitch redraws
   }
 
   function render() {
@@ -746,6 +791,7 @@
     if (d.askInbox) inbox = d.askInbox;
     if (d.askSent) sent = Object.fromEntries(Object.entries(d.askSent).filter(([, q]) => Date.now() - q.at < DAY_MS));
     if (d.follows) follows = d.follows.list || [];
+    addHeaderButton(); // Ask, or the offer to connect
     render();
   }
 
@@ -784,4 +830,4 @@
     }, 400);
   });
   observer.observe(document.documentElement, { childList: true, subtree: true });
-})();
+});

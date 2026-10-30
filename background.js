@@ -7,11 +7,14 @@
 //   "askSenderTab"    id of the tab in the window sending Ask the Streamer whispers
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
+  // Minimized, so it stays out of sight, and the tab muted, so nothing is heard
+  // (the player itself still plays at 1%, which is what Twitch sees).
   if (msg.type === "openStreakSaver") {
-    chrome.windows.create(
-      { url: msg.url, type: "popup", width: msg.width, height: msg.height, left: msg.left, top: msg.top, focused: false },
-      (win) => chrome.storage.local.set({ streakSaverTab: win.tabs[0].id }),
-    );
+    chrome.windows.create({ url: msg.url, type: "popup", state: "minimized", focused: false }, (win) => {
+      const tab = win.tabs[0].id;
+      chrome.tabs.update(tab, { muted: true });
+      chrome.storage.local.set({ streakSaverTab: tab });
+    });
   }
 
   if (msg.type === "amStreakSaver") {
@@ -152,6 +155,14 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (!run) return;
   run().then(reply, (e) => reply({ ok: false, error: String(e) }));
   return true; // reply comes later
+});
+
+// ===== Extension pages in a small window ============================================
+// A page of this extension (like an editor too big for a drop-down), opened in a
+// small window of its own when a Twitch page asks.
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.type !== "openPage" || !/^[a-z-]+\.html$/.test(msg.page || "")) return;
+  chrome.windows.create({ url: chrome.runtime.getURL(msg.page), type: "popup", width: 340, height: 620, focused: true });
 });
 
 // ===== Follow list refresh (people.js) ==============================================

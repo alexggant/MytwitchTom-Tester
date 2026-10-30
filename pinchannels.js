@@ -9,8 +9,9 @@
 // Live status comes from Twitch's public GraphQL endpoint (no sign-in), asked
 // for every pinned channel at once, every 2 minutes while the tab is open.
 //
-// Wrapped so its names don't clash with the other scripts.
-(() => {
+// Wrapped so its names don't clash with the other scripts, and only started if
+// it's switched on (settings.js).
+whenOn("pinchannels", "Pinned channels", () => {
   if (window.top !== window) return;
 
   const FOLLOWED = '.side-nav-section[aria-label="Followed Channels"]';
@@ -113,10 +114,35 @@
   }
 
   // Go to a channel the way Twitch's own links do, without reloading the page.
+  // If they're offline, open their Home tab: Twitch sometimes shows the offline
+  // banner with chat instead. Live channels stay on the stream.
   function go(login) {
-    if (currentChannel() === login && location.pathname.split("/").filter(Boolean).length === 1) return;
-    history.pushState(null, "", `/${login}`);
-    dispatchEvent(new PopStateEvent("popstate"));
+    if (currentChannel() !== login || location.pathname.split("/").filter(Boolean).length !== 1) {
+      history.pushState(null, "", `/${login}`);
+      dispatchEvent(new PopStateEvent("popstate"));
+    }
+    showHome(login);
+  }
+
+  async function showHome(login) {
+    const own = (a) => a?.getAttribute("href")?.toLowerCase() === `/${login}`;
+    for (let t = 0; t < 6000; t += 200) {
+      await new Promise((r) => setTimeout(r, 200));
+      if (currentChannel() !== login) return; // you went somewhere else meanwhile
+      // Home is the first of the channel's tabs (Home, About, Clips, ..., Chat).
+      const home = document.querySelector('[role="tablist"] a');
+      if (own(home)) {
+        if (home.getAttribute("aria-selected") !== "true") home.click();
+        return;
+      }
+      // No tabs: the stream, or the offline banner with chat. Wait until the
+      // page is this channel's, then, only if they're offline, click their name
+      // (it opens Home).
+      const name = [...document.querySelectorAll(".channel-info-content a")].find(own);
+      if (!name) continue;
+      if (document.querySelector('[class*="channel-root__player--offline"], [class*="channel-root__info--offline"]')) name.click();
+      return;
+    }
   }
 
   function row(p) {
@@ -256,4 +282,4 @@
     }, 300);
   });
   observer.observe(document.documentElement, { childList: true, subtree: true });
-})();
+});

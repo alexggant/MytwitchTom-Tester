@@ -6,8 +6,9 @@
 //
 // The cookie work happens in background.js (pages can't touch cookies).
 //
-// Wrapped so its names don't clash with the other scripts.
-(() => {
+// Wrapped so its names don't clash with the other scripts, and only started if
+// it's switched on (settings.js).
+whenOn("accounts", "Account switcher", () => {
   if (window.top !== window) return;
 
   const NAME = '[data-a-target="user-display-name"]';
@@ -136,4 +137,4 @@
     }, 200);
   });
   observer.observe(document.documentElement, { childList: true, subtree: true });
-})();
+});

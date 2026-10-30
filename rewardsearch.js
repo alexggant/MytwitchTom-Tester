@@ -11,8 +11,9 @@
 // rewards; per channel, and they stay next time. Saved in chrome.storage.local
 // as "starredRewards": { channel: [reward titles] }.
 //
-// Wrapped so its names don't clash with the other scripts.
-(() => {
+// Wrapped so its names don't clash with the other scripts, and only started if
+// it's switched on (settings.js).
+whenOn("rewards", "Channel points reward search", () => {
   const LIST = ".rewards-list";
   const ITEM = '[class*="rewardListItem--"]'; // channel point rewards and Bits power-ups
   const CACHE_MS = 5 * 60 * 1000;
@@ -231,4 +232,4 @@
     if (query) filter();
   });
   observer.observe(document.documentElement, { childList: true, subtree: true });
-})();
+});

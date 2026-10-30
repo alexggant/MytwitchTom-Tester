@@ -3,8 +3,9 @@
 // this clicks it as soon as it appears. It's the same click you'd make
 // yourself, on the button Twitch puts there.
 //
-// Wrapped so its names don't clash with the other scripts.
-(() => {
+// Wrapped so its names don't clash with the other scripts, and only started if
+// it's switched on (settings.js).
+whenOn("claim", "Auto-claim bonus points", () => {
   const SUMMARY = '[data-test-selector="community-points-summary"], .community-points-summary';
   const BONUS = 'button[aria-label="Claim Bonus"], .claimable-bonus__icon';
 
@@ -30,4 +31,4 @@
   });
   observer.observe(document.documentElement, { childList: true, subtree: true });
   claim();
-})();
+});

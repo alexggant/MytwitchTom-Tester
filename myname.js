@@ -4,15 +4,20 @@
 // itself; those are left exactly as Twitch draws them.
 //
 // Who you are comes from Twitch's "login" cookie; your chat colour from Twitch
-// (public, no sign-in needed), kept on the page as --tbc-me-color.
+// (public, no sign-in needed), kept on the page as --tbc-me-color. The colour is
+// saved as "myChatColor" so the box has it straight away on the next page load.
+//
+// New chat lines are boxed the moment they're added, before the browser draws
+// them, so the text doesn't shift when the box appears.
 //
 // Highlight words: other words to box the same way, whole words, any
 // capitalisation. Added and removed in the quick phrases pop-up (phrases.js),
 // under the phrases. Saved in chrome.storage.local as "highlightWords": [words].
 // New words apply to messages from then on.
 //
-// Wrapped so its names don't clash with the other scripts.
-(() => {
+// Wrapped so its names don't clash with the other scripts, and only started if
+// it's switched on (settings.js).
+whenOn("myname", "Your name boxed in chat", () => {
   const LINE = '[data-a-target="chat-line-message"], .vod-message';
   const USERNAME = '[data-a-target="chat-message-username"]';
   const TEXT = '[data-a-target="chat-message-text"], .text-fragment';
@@ -50,6 +55,10 @@
     pattern = escaped.length ? new RegExp(`(^|[^\\w@])(@?(?:${escaped.join("|")}))(?!\\w)`, "giu") : null;
   }
 
+  function setColor(color) {
+    if (color && /^#[0-9a-f]{6}$/i.test(color)) document.documentElement.style.setProperty("--tbc-me-color", color);
+  }
+
   // Your chat name colour, for the box. Until it arrives (or if you never set
   // one), the box uses the colour of the text it's around.
   function loadColor(login) {
@@ -61,7 +70,8 @@
       .then((r) => r.json())
       .then((j) => {
         const color = j.data?.user?.chatColor;
-        if (color && /^#[0-9a-f]{6}$/i.test(color)) document.documentElement.style.setProperty("--tbc-me-color", color);
+        setColor(color);
+        if (color) chrome.storage.local.set({ myChatColor: color });
       })
       .catch(() => {});
   }
@@ -110,23 +120,33 @@
     });
   }
 
-  let pending = 0;
-  const observer = new MutationObserver(() => {
+  // Box new lines (and text Twitch fills into a line later) right as they're
+  // added; the observer runs before the browser draws them.
+  const observer = new MutationObserver((records) => {
     try {
       if (!chrome.runtime?.id) return observer.disconnect();
     } catch {
       return observer.disconnect();
     }
-    if (pending) return;
-    pending = setTimeout(() => {
-      pending = 0;
-      scan();
-    }, 200);
+    readNames(); // cheap; picks up signing in or out
+    if (!pattern) return;
+    const lines = new Set();
+    for (const r of records) {
+      for (const node of r.addedNodes) {
+        const el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+        if (!el || el.closest(".tbc-me")) continue; // our own boxes
+        const line = el.closest(LINE);
+        if (line) lines.add(line);
+        else if (node.nodeType === Node.ELEMENT_NODE) node.querySelectorAll(LINE).forEach((l) => lines.add(l));
+      }
+    }
+    lines.forEach(mark);
   });
   observer.observe(document.documentElement, { childList: true, subtree: true });
   scan();
 
-  chrome.storage.local.get("highlightWords", (d) => {
+  chrome.storage.local.get(["highlightWords", "myChatColor"], (d) => {
+    setColor(d.myChatColor);
     words = d.highlightWords || [];
     scan();
   });
@@ -135,4 +155,4 @@
     words = changes.highlightWords.newValue || [];
     scan();
   });
-})();
+});
